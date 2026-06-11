@@ -1,0 +1,225 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{enumitem}
+\usepackage{float}
+
+\geometry{margin=2.5cm}
+
+\title{Comparison of Fitting Results: Old vs New Parameters\\
+\large Differential Evolution Optimization for Transmittance Spectra}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+This document describes the methodology used to compare two sets of curve-fitting results obtained from Differential Evolution (DE) optimization applied to 145 experimental transmittance spectra of AZO (Aluminum-doped Zinc Oxide) thin films. The analysis answers the question: \textbf{Is the fitting better with the old data or with the new data?}
+
+All code is contained in the Jupyter notebook:
+
+\begin{center}
+\texttt{notebooks/1\_parameters\_estimation/AzONetV2/Compare\_Old\_New\_Fittings.ipynb}
+\end{center}
+
+\section{Theoretical Transmittance Model}
+
+The transmittance model used for fitting is that proposed by Alonso~\textit{et~al.}, which describes the optical response of a thin film on a glass substrate. The model is implemented in the function \texttt{modelo\_transmitancia} and takes the following 12 parameters:
+
+\begin{center}
+\begin{tabular}{ccl}
+\toprule
+\textbf{Parameter} & \textbf{Symbol} & \textbf{Description} \\
+\midrule
+$p_1$  & $d$          & Film thickness [nm] \\
+$p_2$  & $\delta_1$   & RMS roughness (air--film interface) [nm] \\
+$p_3$  & $\delta_2$   & RMS roughness (film--glass interface) [nm] \\
+$p_4$  & $A$          & Sellmeier coefficient \\
+$p_5$  & $B$          & Sellmeier coefficient \\
+$p_6$  & $C$          & Sellmeier coefficient \\
+$p_7$  & $D$          & Sellmeier coefficient \\
+$p_8$  & $E$          & Sellmeier coefficient \\
+$p_9$  & $\alpha$     & Urbach tail absorption coefficient [nm$^{-1}$] \\
+$p_{10}$ & $\beta$    & Urbach tail exponent \\
+$p_{11}$ & $\gamma$   & Urbach tail characteristic wavelength [nm] \\
+$p_{12}$ & $n_e$      & Electron concentration [m$^{-3}$] \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The wavelength range used is $\lambda \in [190,\,1100]$~nm with a step of 1~nm (911 points). However, the fitting error is computed only in the interval $\lambda \in [400,\,1100]$~nm (indices 210 onward), as this region carries the most relevant information for parameter estimation.
+
+\section{Optimization Method}
+
+The fitting is performed using \textbf{Differential Evolution} from the \texttt{scipy.optimize} module. DE is a metaheuristic evolutionary algorithm that optimizes a problem by maintaining a population of candidate solutions and iteratively combining them according to simple mutation and crossover rules.
+
+\subsection{Cost Function}
+
+The Mean Squared Error (MSE) between the experimental transmittance $T_{\text{exp}}(\lambda)$ and the model prediction $T_{\text{model}}(\lambda, \mathbf{p})$ is minimized:
+
+\begin{equation}
+\text{MSE}(\mathbf{p}) = \frac{1}{N} \sum_{i = i_0}^{N-1} \bigl[ T_{\text{model}}(\lambda_i, \mathbf{p}) - T_{\text{exp}}(\lambda_i) \bigr]^2
+\label{eq:mse}
+\end{equation}
+
+where $i_0 = 210$ corresponds to $\lambda = 400$~nm.
+
+\subsection{Nonlinear Constraint}
+
+A nonlinear constraint is imposed on the refractive index $n(\lambda)$, calculated from the Sellmeier dispersion relation:
+
+\begin{equation}
+n^2(\lambda) = A + \frac{B \lambda^2}{\lambda^2 - C^2} + \frac{D \lambda^2}{\lambda^2 - E^2}
+\end{equation}
+
+The mean refractive index over the full spectral range is constrained to the interval:
+
+\begin{equation}
+n_{\text{mean}} \in [1.8,\, 2.1]
+\end{equation}
+
+This is implemented via a \texttt{NonlinearConstraint} object in \texttt{scipy.optimize}.
+
+\subsection{Parameter Bounds}
+
+Each parameter is bounded around physically plausible ranges, with the thickness bound centered at the profilometry-measured value with a tolerance equal to the measurement error. A tolerance factor $p_l = 0.5$ is applied to all other bounds to allow a $\pm 50\%$ deviation from reference values obtained from prior EGP-GA (Elitist Genetic Programming -- Genetic Algorithm) estimates.
+
+\section{Data Sources}
+
+Two NumPy arrays of shape $(145, 14)$ store the fitting results:
+
+\begin{itemize}[noitemsep]
+    \item \texttt{old\_data.npy} --- Fitting parameters and MSEs from the previous DE run.
+    \item \texttt{new\_data.npy} --- Fitting parameters and MSEs from the latest DE run.
+\end{itemize}
+
+Each row contains:
+
+\begin{center}
+\texttt{[index, $d$, $\delta_1$, $\delta_2$, $A$, $B$, $C$, $D$, $E$, $\alpha$, $\beta$, $\gamma$, $n_e$, MSE]}
+\end{center}
+
+The experimental spectra and thickness measurements are loaded from:
+
+\begin{center}
+\texttt{results/dataframe\_spectrum\_thickness\_145\_final.pkl}
+\end{center}
+
+which contains 145 rows with columns: \texttt{Nombre}, \texttt{Nombre-Arc}, \texttt{Espesor}, \texttt{Error}, \texttt{Error Porcentual}, and \texttt{Espectro} (a 911-element array of transmittance values).
+
+\section{Comparison Methodology}
+
+The notebook is organized into the following sections:
+
+\subsection{Section 1: MSE Statistical Comparison}
+
+The MSE distributions of the old and new fitting runs are compared statistically:
+
+\begin{itemize}[noitemsep]
+    \item \textbf{Descriptive statistics}: mean, median, standard deviation, minimum, and maximum of both MSE distributions.
+    \item \textbf{Win counts}: counts of how many spectra have a lower MSE under the old parameters vs.\ the new parameters.
+    \item \textbf{Average improvement/regression}: mean MSE difference for spectra where the new fit improves or worsens.
+\end{itemize}
+
+These results are presented in a formatted table and accompanied by three plots:
+\begin{enumerate}[noitemsep]
+    \item \textit{MSE Distribution} --- overlapping histograms of old and new MSE values with median indicators.
+    \item \textit{MSE Box Plot} --- side-by-side box plots comparing the old and new distributions.
+    \item \textit{Wins Count Bar Chart} --- bar chart showing how many spectra favor each parameter set.
+\end{enumerate}
+
+Additionally, a scatter plot of \texttt{Old MSE vs.\ New MSE} is generated, where each point represents one spectrum; points are color-coded by which set produces the lower MSE. An identity line ($y = x$) is drawn for reference. A companion bar chart shows the per-spectrum MSE differences (New $-$ Old) sorted in ascending order.
+
+\subsection{Section 2: Per-Sample Analysis}
+
+The top 10 most improved spectra (largest negative $\Delta\text{MSE}$) and the top 10 most regressed spectra (largest positive $\Delta\text{MSE}$) are identified and displayed in tables. Each entry includes:
+
+\begin{itemize}[noitemsep]
+    \item Spectrum index and sample name
+    \item Film thickness
+    \item Old MSE, New MSE, $\Delta\text{MSE}$, and percentage change
+\end{itemize}
+
+\subsection{Section 3: Visual Spectrum Comparison (Batched Plots)}
+
+All 145 spectra are plotted in batches of 30 subplots each (5 columns $\times$ 6 rows). For each spectrum, three curves are overlaid:
+
+\begin{itemize}[noitemsep]
+    \item \textbf{Black dots}: Experimental transmittance data
+    \item \textbf{Blue line}: Model prediction using the old fitting parameters
+    \item \textbf{Orange line}: Model prediction using the new fitting parameters
+\end{itemize}
+
+The title of each subplot is colored green if the new MSE is lower, or red if the old MSE is lower. A vertical dashed line at 400~nm marks the start of the fitting region. The batched plots are saved as \texttt{images/batches/spectra\_batch\_XX.png}.
+
+\subsection{Section 4: Individual High-Quality Spectrum Plots}
+
+Each of the 145 spectra is also saved as a standalone high-resolution PNG image at 300~DPI (10$\times$6 inches). These figures contain only the experimental data, the old model prediction, the new model prediction, and a legend indicating the MSE values. They are saved in:
+
+\begin{center}
+\texttt{images/full/spec\_XXX\_SampleName.png}
+\end{center}
+
+\subsection{Section 5: Highlight --- Extreme Cases}
+
+A 5$\times$2 grid of larger, more detailed plots is generated for the 5 most improved and 5 most regressed spectra, enabling close inspection of the fitting quality differences in extreme cases. Each subplot includes:
+\begin{itemize}[noitemsep]
+    \item Experimental data (black dots)
+    \item Old model prediction with MSE label
+    \item New model prediction with MSE label
+    \item Fitting region indicator (dashed line at 400~nm)
+    \item Status label (IMPROVED / REGRESSED) and $\Delta\text{MSE}$
+\end{itemize}
+
+\section{Generated Outputs}
+
+The following outputs are produced by the notebook:
+
+\subsection*{Data Files}
+
+\begin{itemize}[noitemsep]
+    \item \texttt{old\_data.npy} --- Previous DE fitting results (145 $\times$ 14)
+    \item \texttt{new\_data.npy} --- Latest DE fitting results (145 $\times$ 14)
+\end{itemize}
+
+\subsection*{Summary Plots}
+
+\begin{itemize}[noitemsep]
+    \item \texttt{images/mse\_comparison\_summary.png} --- Histogram, box plot, and wins bar chart
+    \item \texttt{images/mse\_scatter\_comparison.png} --- Old vs New MSE scatter + sorted $\Delta$MSE bars
+\end{itemize}
+
+\subsection*{Batched Spectrum Plots (16 files)}
+
+\begin{itemize}[noitemsep]
+    \item \texttt{images/batches/spectra\_batch\_01.png} through \texttt{spectra\_batch\_16.png}
+\end{itemize}
+
+\subsection*{Individual Spectrum Plots (145 files, 300~DPI)}
+
+\begin{itemize}[noitemsep]
+    \item \texttt{images/full/spec\_000\_ANZO32.png} through \texttt{spec\_144\_ANZO694M.png}
+\end{itemize}
+
+\subsection*{Highlight Plot}
+
+\begin{itemize}[noitemsep]
+    \item \texttt{highlight\_extremes.png} --- 5 most improved vs.\ 5 most regressed spectra
+\end{itemize}
+
+\vspace{1em}
+\noindent The complete analysis can be reproduced by running the Jupyter notebook\\
+\texttt{Compare\_Old\_New\_Fittings.ipynb} located in \texttt{notebooks/1\_parameters\_estimation/AzONetV2/}.
+
+\end{document}
