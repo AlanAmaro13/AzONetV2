@@ -1,0 +1,60 @@
+============================================================
+DISTRIBUTION ANALYSIS REPORT
+Parameter: refractive_index_n
+============================================================
+
+1. BASIC STATISTICS
+----------------------------------------
+Sample size: 145
+Mean: 1.8457
+Median: 1.8025
+Std deviation: 0.0828
+Variance: 0.0069
+Min: 1.8000
+Max: 2.0999
+Range: 0.2999
+IQR: 0.0419
+
+2. DISTRIBUTION SHAPE
+----------------------------------------
+Skewness: 1.9013
+  → Highly skewed, right (positive) skew
+Kurtosis (excess): 2.3898
+  → Leptokurtic (heavy-tailed)
+
+3. COMPARISON WITH NORMAL DISTRIBUTION
+----------------------------------------
+
+Normality tests:
+Shapiro-Wilk test: W = 0.6120, p = 0.000000
+  → Distribution appears non-normal (p ≤ 0.05)
+Kolmogorov-Smirnov test: D = 0.3247, p = 0.000000
+Anderson-Darling test: A² = 24.5200
+  → Reject normality at 5% level (A² ≥ 0.7670)
+Jarque-Bera test: JB = 116.6053, p = 0.000000
+
+Quantile comparison (theoretical vs empirical):
+Quantile   Empirical    Normal       Difference  
+----------------------------------------------
+0.01       1.8000       1.6531       0.1469      
+0.05       1.8000       1.7095       0.0905      
+0.25       1.8002       1.7899       0.0103      
+0.5        1.8025       1.8457       -0.0432     
+0.75       1.8421       1.9016       -0.0595     
+0.95       2.0623       1.9820       0.0804      
+0.99       2.0984       2.0384       0.0600      
+
+4. VISUAL ANALYSIS (plots saved to disk)
+
+  → Plot saved to: ./data_results/distribution_analysis/refractive_index_n/analysis_refractive_index_n.png
+
+5. ADDITIONAL INSIGHTS
+----------------------------------------
+Potential outliers (IQR method): 24 (16.55%)
+Entropy: 2.0595 bits
+Coefficient of variation: 0.0449
+
+============================================================
+ANALYSIS COMPLETE
+Report saved to: ./data_results/distribution_analysis/refractive_index_n/analysis_refractive_index_n.txt
+============================================================

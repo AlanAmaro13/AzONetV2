@@ -1,0 +1,60 @@
+============================================================
+DISTRIBUTION ANALYSIS REPORT
+Parameter: roughness_R2
+============================================================
+
+1. BASIC STATISTICS
+----------------------------------------
+Sample size: 145
+Mean: 22.1410
+Median: 19.6324
+Std deviation: 14.2614
+Variance: 203.3872
+Min: 5.0000
+Max: 73.7426
+Range: 68.7426
+IQR: 18.0266
+
+2. DISTRIBUTION SHAPE
+----------------------------------------
+Skewness: 0.9899
+  → Moderately skewed, right (positive) skew
+Kurtosis (excess): 0.7753
+  → Leptokurtic (heavy-tailed)
+
+3. COMPARISON WITH NORMAL DISTRIBUTION
+----------------------------------------
+
+Normality tests:
+Shapiro-Wilk test: W = 0.9191, p = 0.000000
+  → Distribution appears non-normal (p ≤ 0.05)
+Kolmogorov-Smirnov test: D = 0.1147, p = 0.040596
+Anderson-Darling test: A² = 2.9473
+  → Reject normality at 5% level (A² ≥ 0.7670)
+Jarque-Bera test: JB = 26.2193, p = 0.000002
+
+Quantile comparison (theoretical vs empirical):
+Quantile   Empirical    Normal       Difference  
+----------------------------------------------
+0.01       5.0000       -11.0360     16.0360     
+0.05       5.0003       -1.3169      6.3172      
+0.25       11.9481      12.5218      -0.5737     
+0.5        19.6324      22.1410      -2.5086     
+0.75       29.9747      31.7601      -1.7854     
+0.95       48.9294      45.5989      3.3305      
+0.99       62.9239      55.3179      7.6060      
+
+4. VISUAL ANALYSIS (plots saved to disk)
+
+  → Plot saved to: ./data_results/distribution_analysis/roughness_R2/analysis_roughness_R2.png
+
+5. ADDITIONAL INSIGHTS
+----------------------------------------
+Potential outliers (IQR method): 2 (1.38%)
+Entropy: 2.8293 bits
+Coefficient of variation: 0.6441
+
+============================================================
+ANALYSIS COMPLETE
+Report saved to: ./data_results/distribution_analysis/roughness_R2/analysis_roughness_R2.txt
+============================================================

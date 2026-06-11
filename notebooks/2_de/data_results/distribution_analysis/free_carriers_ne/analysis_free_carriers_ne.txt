@@ -1,0 +1,60 @@
+============================================================
+DISTRIBUTION ANALYSIS REPORT
+Parameter: free_carriers_ne
+============================================================
+
+1. BASIC STATISTICS
+----------------------------------------
+Sample size: 145
+Mean: 1.6893
+Median: 1.2362
+Std deviation: 1.4297
+Variance: 2.0440
+Min: 0.5003
+Max: 7.4997
+Range: 6.9995
+IQR: 1.3770
+
+2. DISTRIBUTION SHAPE
+----------------------------------------
+Skewness: 1.9884
+  → Highly skewed, right (positive) skew
+Kurtosis (excess): 4.4675
+  → Leptokurtic (heavy-tailed)
+
+3. COMPARISON WITH NORMAL DISTRIBUTION
+----------------------------------------
+
+Normality tests:
+Shapiro-Wilk test: W = 0.7756, p = 0.000000
+  → Distribution appears non-normal (p ≤ 0.05)
+Kolmogorov-Smirnov test: D = 0.2028, p = 0.000011
+Anderson-Darling test: A² = 9.0110
+  → Reject normality at 5% level (A² ≥ 0.7670)
+Jarque-Bera test: JB = 203.9362, p = 0.000000
+
+Quantile comparison (theoretical vs empirical):
+Quantile   Empirical    Normal       Difference  
+----------------------------------------------
+0.01       0.5003       -1.6366      2.1370      
+0.05       0.5006       -0.6623      1.1629      
+0.25       0.7026       0.7250       -0.0223     
+0.5        1.2362       1.6893       -0.4530     
+0.75       2.0796       2.6536       -0.5739     
+0.95       4.0823       4.0409       0.0414      
+0.99       7.1902       5.0152       2.1750      
+
+4. VISUAL ANALYSIS (plots saved to disk)
+
+  → Plot saved to: ./data_results/distribution_analysis/free_carriers_ne/analysis_free_carriers_ne.png
+
+5. ADDITIONAL INSIGHTS
+----------------------------------------
+Potential outliers (IQR method): 7 (4.83%)
+Entropy: 2.5773 bits
+Coefficient of variation: 0.8463
+
+============================================================
+ANALYSIS COMPLETE
+Report saved to: ./data_results/distribution_analysis/free_carriers_ne/analysis_free_carriers_ne.txt
+============================================================

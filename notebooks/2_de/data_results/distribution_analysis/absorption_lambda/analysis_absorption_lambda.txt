@@ -1,0 +1,60 @@
+============================================================
+DISTRIBUTION ANALYSIS REPORT
+Parameter: absorption_lambda
+============================================================
+
+1. BASIC STATISTICS
+----------------------------------------
+Sample size: 145
+Mean: 358.8940
+Median: 358.1618
+Std deviation: 8.7519
+Variance: 76.5959
+Min: 341.6638
+Max: 388.4269
+Range: 46.7631
+IQR: 12.7870
+
+2. DISTRIBUTION SHAPE
+----------------------------------------
+Skewness: 0.6784
+  → Moderately skewed, right (positive) skew
+Kurtosis (excess): 0.4487
+  → Mesokurtic (similar to normal)
+
+3. COMPARISON WITH NORMAL DISTRIBUTION
+----------------------------------------
+
+Normality tests:
+Shapiro-Wilk test: W = 0.9657, p = 0.001080
+  → Distribution appears non-normal (p ≤ 0.05)
+Kolmogorov-Smirnov test: D = 0.0809, p = 0.283327
+Anderson-Darling test: A² = 1.2397
+  → Reject normality at 5% level (A² ≥ 0.7670)
+Jarque-Bera test: JB = 11.8213, p = 0.002710
+
+Quantile comparison (theoretical vs empirical):
+Quantile   Empirical    Normal       Difference  
+----------------------------------------------
+0.01       343.1769     338.5341     4.6428      
+0.05       347.1388     344.4984     2.6404      
+0.25       351.7255     352.9910     -1.2655     
+0.5        358.1618     358.8940     -0.7323     
+0.75       364.5125     364.7971     -0.2846     
+0.95       374.2878     373.2897     0.9982      
+0.99       382.5310     379.2540     3.2770      
+
+4. VISUAL ANALYSIS (plots saved to disk)
+
+  → Plot saved to: ./data_results/distribution_analysis/absorption_lambda/analysis_absorption_lambda.png
+
+5. ADDITIONAL INSIGHTS
+----------------------------------------
+Potential outliers (IQR method): 1 (0.69%)
+Entropy: 2.8197 bits
+Coefficient of variation: 0.0244
+
+============================================================
+ANALYSIS COMPLETE
+Report saved to: ./data_results/distribution_analysis/absorption_lambda/analysis_absorption_lambda.txt
+============================================================

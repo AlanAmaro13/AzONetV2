@@ -1,0 +1,60 @@
+============================================================
+DISTRIBUTION ANALYSIS REPORT
+Parameter: thickness_r
+============================================================
+
+1. BASIC STATISTICS
+----------------------------------------
+Sample size: 145
+Mean: 772.3146
+Median: 783.2036
+Std deviation: 339.2029
+Variance: 115058.6111
+Min: 103.5237
+Max: 1476.0822
+Range: 1372.5586
+IQR: 577.9567
+
+2. DISTRIBUTION SHAPE
+----------------------------------------
+Skewness: 0.1570
+  → Approximately symmetric, right (positive) skew
+Kurtosis (excess): -0.9997
+  → Platykurtic (light-tailed)
+
+3. COMPARISON WITH NORMAL DISTRIBUTION
+----------------------------------------
+
+Normality tests:
+Shapiro-Wilk test: W = 0.9637, p = 0.000706
+  → Distribution appears non-normal (p ≤ 0.05)
+Kolmogorov-Smirnov test: D = 0.1209, p = 0.026356
+Anderson-Darling test: A² = 1.7532
+  → Reject normality at 5% level (A² ≥ 0.7670)
+Jarque-Bera test: JB = 6.7051, p = 0.034995
+
+Quantile comparison (theoretical vs empirical):
+Quantile   Empirical    Normal       Difference  
+----------------------------------------------
+0.01       178.5707     -16.7894     195.3600    
+0.05       241.9872     214.3755     27.6118     
+0.25       475.9550     543.5257     -67.5708    
+0.5        783.2036     772.3146     10.8890     
+0.75       1053.9117    1001.1035    52.8082     
+0.95       1286.8495    1330.2537    -43.4042    
+0.99       1436.9976    1561.4186    -124.4210   
+
+4. VISUAL ANALYSIS (plots saved to disk)
+
+  → Plot saved to: ./data_results/distribution_analysis/thickness_r/analysis_thickness_r.png
+
+5. ADDITIONAL INSIGHTS
+----------------------------------------
+Potential outliers (IQR method): 0 (0.00%)
+Entropy: 2.9509 bits
+Coefficient of variation: 0.4392
+
+============================================================
+ANALYSIS COMPLETE
+Report saved to: ./data_results/distribution_analysis/thickness_r/analysis_thickness_r.txt
+============================================================

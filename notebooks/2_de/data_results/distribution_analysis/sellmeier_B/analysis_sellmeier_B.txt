@@ -1,0 +1,60 @@
+============================================================
+DISTRIBUTION ANALYSIS REPORT
+Parameter: sellmeier_B
+============================================================
+
+1. BASIC STATISTICS
+----------------------------------------
+Sample size: 145
+Mean: 1.2884
+Median: 1.3493
+Std deviation: 0.6771
+Variance: 0.4585
+Min: 0.0643
+Max: 2.3762
+Range: 2.3119
+IQR: 1.0077
+
+2. DISTRIBUTION SHAPE
+----------------------------------------
+Skewness: -0.3339
+  → Approximately symmetric, left (negative) skew
+Kurtosis (excess): -0.9605
+  → Platykurtic (light-tailed)
+
+3. COMPARISON WITH NORMAL DISTRIBUTION
+----------------------------------------
+
+Normality tests:
+Shapiro-Wilk test: W = 0.9455, p = 0.000019
+  → Distribution appears non-normal (p ≤ 0.05)
+Kolmogorov-Smirnov test: D = 0.0838, p = 0.246118
+Anderson-Darling test: A² = 1.9683
+  → Reject normality at 5% level (A² ≥ 0.7670)
+Jarque-Bera test: JB = 8.3095, p = 0.015690
+
+Quantile comparison (theoretical vs empirical):
+Quantile   Empirical    Normal       Difference  
+----------------------------------------------
+0.01       0.0717       -0.2869      0.3586      
+0.05       0.0991       0.1746       -0.0755     
+0.25       0.8284       0.8317       -0.0033     
+0.5        1.3493       1.2884       0.0609      
+0.75       1.8361       1.7451       0.0910      
+0.95       2.2372       2.4022       -0.1650     
+0.99       2.3471       2.8636       -0.5165     
+
+4. VISUAL ANALYSIS (plots saved to disk)
+
+  → Plot saved to: ./data_results/distribution_analysis/sellmeier_B/analysis_sellmeier_B.png
+
+5. ADDITIONAL INSIGHTS
+----------------------------------------
+Potential outliers (IQR method): 0 (0.00%)
+Entropy: 3.0978 bits
+Coefficient of variation: 0.5256
+
+============================================================
+ANALYSIS COMPLETE
+Report saved to: ./data_results/distribution_analysis/sellmeier_B/analysis_sellmeier_B.txt
+============================================================

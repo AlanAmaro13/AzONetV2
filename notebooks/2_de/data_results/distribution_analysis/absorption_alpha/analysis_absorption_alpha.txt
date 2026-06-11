@@ -1,0 +1,60 @@
+============================================================
+DISTRIBUTION ANALYSIS REPORT
+Parameter: absorption_alpha
+============================================================
+
+1. BASIC STATISTICS
+----------------------------------------
+Sample size: 145
+Mean: 7.2743
+Median: 6.9452
+Std deviation: 4.0315
+Variance: 16.2533
+Min: 0.4944
+Max: 14.8764
+Range: 14.3820
+IQR: 6.7098
+
+2. DISTRIBUTION SHAPE
+----------------------------------------
+Skewness: 0.2119
+  → Approximately symmetric, right (positive) skew
+Kurtosis (excess): -1.2017
+  → Platykurtic (light-tailed)
+
+3. COMPARISON WITH NORMAL DISTRIBUTION
+----------------------------------------
+
+Normality tests:
+Shapiro-Wilk test: W = 0.9458, p = 0.000021
+  → Distribution appears non-normal (p ≤ 0.05)
+Kolmogorov-Smirnov test: D = 0.1102, p = 0.054592
+Anderson-Darling test: A² = 2.3383
+  → Reject normality at 5% level (A² ≥ 0.7670)
+Jarque-Bera test: JB = 9.7879, p = 0.007492
+
+Quantile comparison (theoretical vs empirical):
+Quantile   Empirical    Normal       Difference  
+----------------------------------------------
+0.01       0.8951       -2.1045      2.9996      
+0.05       1.6174       0.6430       0.9743      
+0.25       3.6894       4.5551       -0.8656     
+0.5        6.9452       7.2743       -0.3291     
+0.75       10.3992      9.9935       0.4057      
+0.95       13.5830      13.9056      -0.3226     
+0.99       14.6243      16.6531      -2.0288     
+
+4. VISUAL ANALYSIS (plots saved to disk)
+
+  → Plot saved to: ./data_results/distribution_analysis/absorption_alpha/analysis_absorption_alpha.png
+
+5. ADDITIONAL INSIGHTS
+----------------------------------------
+Potential outliers (IQR method): 0 (0.00%)
+Entropy: 3.1272 bits
+Coefficient of variation: 0.5542
+
+============================================================
+ANALYSIS COMPLETE
+Report saved to: ./data_results/distribution_analysis/absorption_alpha/analysis_absorption_alpha.txt
+============================================================

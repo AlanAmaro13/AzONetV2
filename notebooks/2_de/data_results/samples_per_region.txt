@@ -1,0 +1,13 @@
+Sample Count per Thickness Region
+==================================================
+
+Total samples: 145
+
+R1: [100, 250] nm: 8 samples
+R2: [250, 600] nm: 47 samples
+R3: [600, 950] nm: 46 samples
+R4: [950, 1100] nm: 10 samples
+R5: [1100, 1500] nm: 34 samples
+
+──────────────────────────────────────────────────
+Sum: 145

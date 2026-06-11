@@ -1,0 +1,60 @@
+============================================================
+DISTRIBUTION ANALYSIS REPORT
+Parameter: absorption_beta
+============================================================
+
+1. BASIC STATISTICS
+----------------------------------------
+Sample size: 145
+Mean: 9.9720
+Median: 9.7300
+Std deviation: 1.7354
+Variance: 3.0117
+Min: 4.7927
+Max: 22.4879
+Range: 17.6952
+IQR: 1.2695
+
+2. DISTRIBUTION SHAPE
+----------------------------------------
+Skewness: 2.5441
+  → Highly skewed, right (positive) skew
+Kurtosis (excess): 18.4003
+  → Leptokurtic (heavy-tailed)
+
+3. COMPARISON WITH NORMAL DISTRIBUTION
+----------------------------------------
+
+Normality tests:
+Shapiro-Wilk test: W = 0.8039, p = 0.000000
+  → Distribution appears non-normal (p ≤ 0.05)
+Kolmogorov-Smirnov test: D = 0.1522, p = 0.002124
+Anderson-Darling test: A² = 5.3491
+  → Reject normality at 5% level (A² ≥ 0.7670)
+Jarque-Bera test: JB = 2052.5912, p = 0.000000
+
+Quantile comparison (theoretical vs empirical):
+Quantile   Empirical    Normal       Difference  
+----------------------------------------------
+0.01       6.1427       5.9348       0.2079      
+0.05       7.8246       7.1175       0.7072      
+0.25       9.1706       8.8014       0.3691      
+0.5        9.7300       9.9720       -0.2420     
+0.75       10.4401      11.1425      -0.7024     
+0.95       12.4934      12.8265      -0.3330     
+0.99       13.3727      14.0091      -0.6364     
+
+4. VISUAL ANALYSIS (plots saved to disk)
+
+  → Plot saved to: ./data_results/distribution_analysis/absorption_beta/analysis_absorption_beta.png
+
+5. ADDITIONAL INSIGHTS
+----------------------------------------
+Potential outliers (IQR method): 15 (10.34%)
+Entropy: 3.3747 bits
+Coefficient of variation: 0.1740
+
+============================================================
+ANALYSIS COMPLETE
+Report saved to: ./data_results/distribution_analysis/absorption_beta/analysis_absorption_beta.txt
+============================================================
