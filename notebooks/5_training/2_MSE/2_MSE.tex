@@ -430,6 +430,110 @@ The U-NET architecture with the hyperparameters discovered in \texttt{4\_hp\_sea
 
 These results validate the two-phase HP search strategy and demonstrate that convolutional architectures (U-NET) can effectively learn the inverse mapping from transmittance spectra to film thickness.
 
+\section{Comparison: First Version (MAE Loss)}
+
+Before the MSE production run, an initial training was performed using \textbf{MAE loss} — the same loss function used during the hyperparameter search. This run provides a baseline for evaluating the impact of switching to MSE.
+
+\subsection{First Version Configuration}
+
+\textbf{File:} \texttt{1\_firstVersion/0\_UNET\_F145F2.py}
+
+\begin{table}[H]
+\centering
+\caption{First Version Training Configuration}
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Loss function & \textbf{MAE} (Mean Absolute Error):
+\begin{equation*}
+\mathcal{L} = \frac{1}{N}\sum_{i=1}^{N}|y_i^{\text{pred}} - y_i^{\text{true}}|
+\end{equation*} \\
+Architecture & Identical to 2\_MSE: F=21, kernels [150,50,5], nodes [470,340,330], D=35\%, L1/L2=1e-6/1e-5, L1C/L2C=1e-6/1e-4 \\
+Library & AmaroXI (imported via {\tt from AmaroXI.AmaroX.UNET import *}) \\
+Data source & \texttt{0\_data\_simulation/F145F} \\
+Epochs & 100 \\
+Batch size & 512 \\
+Seed & 13 \\
+Optimizer & Adam (lr=0.001) \\
+Metrics & MAPE, RMSE \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{First Version Training Results}
+
+\begin{table}[H]
+\centering
+\caption{First Version — Selected Epochs}
+\begin{tabular}{ccccccc}
+\toprule
+\textbf{Epoch} & \textbf{Train MAE} & \textbf{Train MAPE} & \textbf{Train RMSE} & \textbf{Val MAE} & \textbf{Val MAPE} & \textbf{Val RMSE} \\
+\midrule
+0  & 226.3 & 33.20\% & 407.7 & 14.0 & 4.58\% & 28.9 \\
+1  & 31.9  & 9.19\%  & 45.0  & 19.1 & 7.13\% & 34.8 \\
+14 & 22.3  & 5.87\%  & 28.4  & 7.2  & 1.79\% & 8.5  \\
+17 & 21.9  & 5.79\%  & 28.0  & \textbf{5.8} & \textbf{1.13\%} & \textbf{7.1} \\
+50 & 21.3  & 5.70\%  & 27.7  & 6.0  & 1.28\% & 7.7  \\
+80 & 20.9  & 5.57\%  & 27.1  & 46.9 & 6.38\% & 64.6 \\
+99 & 21.2  & 5.65\%  & 27.5  & 18.3 & 3.99\% & 32.4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Best performance:} Epoch 17 with val\_mape = 1.13\%, val\_mae = 5.76 nm, val\_rmse = 7.13 nm.
+
+\subsection{Head-to-Head Comparison}
+
+\begin{table}[H]
+\centering
+\caption{MAE vs. MSE — Best Validation Performance}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{1\_firstVersion (MAE)} & \textbf{2\_MSE (MSE)} \\
+\midrule
+Loss function & $|y - \hat{y}|$ & $(y - \hat{y})^2$ \\
+Best epoch & 17 & 39 \\
+Best Val MAPE & 1.13\% & \textbf{0.61\%} \\
+Best Val RMSE & 7.13 nm & \textbf{3.85 nm} \\
+Best Val MAE & 5.76 nm & — (not tracked) \\
+Val MAE at best MAPE epoch & 5.76 nm & — (MSE=18.28 nm$^2$) \\
+Convergence speed & Faster (best at epoch 17) & Slower (best at epoch 39) \\
+Overfitting onset & $\sim$epoch 20 & $\sim$epoch 50 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Analysis}
+
+Switching from MAE to MSE loss yields a \textbf{46\% relative improvement} in MAPE (from 1.13\% to 0.61\%) and a \textbf{46\% relative improvement} in RMSE (from 7.13 nm to 3.85 nm). Several factors may explain this:
+
+\begin{enumerate}
+    \item \textbf{Squared penalty:} MSE overweights large errors ($\propto \epsilon^2$), which forces the optimizer to focus on outlier spectra — the most difficult cases — driving the model to learn features that generalize better.
+    \item \textbf{Gradient magnitude:} MAE has constant gradient magnitude ($\pm 1$), while MSE gradient scales with error ($2\epsilon$). As the model improves, MSE gradients become smaller near the optimum, allowing finer convergence (but also risking gradient vanishing).
+    \item \textbf{Consistency with pipeline:} The Differential Evolution fitting and data simulation stages both minimize MSE, creating a training signal aligned with the data generation process.
+\end{enumerate}
+
+Both runs exhibit significant \textbf{validation variance} (loss oscillating by an order of magnitude epoch-to-epoch), suggesting:
+\begin{itemize}
+    \item The validation set may contain rare spectral patterns not well represented in training.
+    \item Batch size 512 produces noisy gradient estimates on the validation set.
+    \item Further regularization or data augmentation could improve stability.
+\end{itemize}
+
+Both models overfit eventually, but the MSE run plateaus later (epoch 50 vs. epoch 20), likely because the squared-error surface is smoother and less prone to sharp overfitting than the absolute-error surface.
+
+\section{Conclusion}
+
+The two-phase training strategy — first with MAE (baseline), then with MSE (improved) — demonstrates that the choice of loss function significantly impacts regression accuracy for this inverse problem. The best model achieves:
+
+\begin{itemize}
+    \item \textbf{Validation MAPE: 0.61\%} — average prediction error under 1\% of true thickness.
+    \item \textbf{Validation RMSE: 3.85 nm} — root mean squared thickness error under 4 nm.
+\end{itemize}
+
+These results validate the end-to-end pipeline: experimental data processing $\rightarrow$ DE parameter fitting $\rightarrow$ GMM data simulation $\rightarrow$ U-NET HP search $\rightarrow$ production training, achieving a practical thin-film thickness prediction system from transmittance spectra.
+
 \section{Dependencies}
 
 \begin{itemize}
@@ -437,7 +541,8 @@ These results validate the two-phase HP search strategy and demonstrate that con
     \item \texttt{h5py} (HDF5 data loading)
     \item \texttt{numpy}, \texttt{pandas}
     \item \texttt{matplotlib}, \texttt{seaborn}
-    \item \texttt{google.colab} (Colab-specific: drive mount, {\tt get\_ipython().system()})
+    \item \texttt{google.colab} (Colab-specific: drive mount, GPU)
+    \item \texttt{AmaroXI} (custom library, used only in 1\_firstVersion)
 \end{itemize}
 
 \end{document}
