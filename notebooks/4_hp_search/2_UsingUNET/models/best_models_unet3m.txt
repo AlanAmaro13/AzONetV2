@@ -1,0 +1,114 @@
+Results summary
+Results in ../Models/UNET/KT/UNET3M
+Showing 10 best trials
+Objective(name="val_metric_accuracy", direction="max")
+
+Trial 187 summary
+Hyperparameters:
+F_UNET: 21
+units0: 470
+units1: 340
+units3: 330
+dropout: 25
+optimizer: adam 
+learning_rate: 0.001
+Score: 93.82471643066406
+
+Trial 042 summary
+Hyperparameters:
+F_UNET: 25
+units0: 190
+units1: 450
+units3: 380
+dropout: 5
+optimizer: adam 
+learning_rate: 0.001
+Score: 92.87349523925781
+
+Trial 265 summary
+Hyperparameters:
+F_UNET: 19
+units0: 420
+units1: 290
+units3: 270
+dropout: 20
+optimizer: adam 
+learning_rate: 0.001
+Score: 91.84521395874023
+
+Trial 093 summary
+Hyperparameters:
+F_UNET: 27
+units0: 130
+units1: 150
+units3: 180
+dropout: 10
+optimizer: adam 
+learning_rate: 0.001
+Score: 91.67283916473389
+
+Trial 211 summary
+Hyperparameters:
+F_UNET: 11
+units0: 310
+units1: 420
+units3: 160
+dropout: 40
+optimizer: adam 
+learning_rate: 0.001
+Score: 91.52761840820312
+
+Trial 148 summary
+Hyperparameters:
+F_UNET: 21
+units0: 380
+units1: 470
+units3: 330
+dropout: 45
+optimizer: adam 
+learning_rate: 0.001
+Score: 91.38472938537598
+
+Trial 076 summary
+Hyperparameters:
+F_UNET: 15
+units0: 290
+units1: 320
+units3: 440
+dropout: 10
+optimizer: adam 
+learning_rate: 0.001
+Score: 90.87451267242432
+
+Trial 299 summary
+Hyperparameters:
+F_UNET: 27
+units0: 480
+units1: 210
+units3: 390
+dropout: 30
+optimizer: adam 
+learning_rate: 0.001
+Score: 90.2634859085083
+
+Trial 033 summary
+Hyperparameters:
+F_UNET: 13
+units0: 90
+units1: 460
+units3: 270
+dropout: 35
+optimizer: adam 
+learning_rate: 0.001
+Score: 89.92461783599854
+
+Trial 154 summary
+Hyperparameters:
+F_UNET: 29
+units0: 70
+units1: 380
+units3: 490
+dropout: 20
+optimizer: adam 
+learning_rate: 0.001
+Score: 89.6583424987793

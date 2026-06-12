@@ -1,0 +1,104 @@
+Results summary
+Results in ./models/DNN_UNET_F1_R/UNET-F1-R-KT
+Showing 10 best trials
+Objective(name="val_mape", direction="min")
+
+Trial 29 summary
+Hyperparameters:
+Dropout: 35
+L1: 1e-06
+L2: 1e-05
+L1C: 1e-06
+L2C: 0.0001
+optimizer: adam
+Score: 5.768974304199219
+
+Trial 44 summary
+Hyperparameters:
+Dropout: 30
+L1: 1e-06
+L2: 1e-06
+L1C: 1e-06
+L2C: 1e-06
+optimizer: adam
+Score: 6.879162549972534
+
+Trial 20 summary
+Hyperparameters:
+Dropout: 25
+L1: 1e-06
+L2: 1e-06
+L1C: 0.0001
+L2C: 1e-05
+optimizer: adam
+Score: 6.986196517944336
+
+Trial 37 summary
+Hyperparameters:
+Dropout: 35
+L1: 1e-06
+L2: 1e-05
+L1C: 1e-06
+L2C: 0.001
+optimizer: adam
+Score: 7.104734420776367
+
+Trial 14 summary
+Hyperparameters:
+Dropout: 25
+L1: 1e-06
+L2: 1e-05
+L1C: 1e-06
+L2C: 0.0001
+optimizer: adam
+Score: 7.23149037361145
+
+Trial 41 summary
+Hyperparameters:
+Dropout: 30
+L1: 1e-06
+L2: 1e-06
+L1C: 1e-06
+L2C: 1e-06
+optimizer: adam
+Score: 7.6437578201293945
+
+Trial 38 summary
+Hyperparameters:
+Dropout: 35
+L1: 1e-06
+L2: 1e-05
+L1C: 1e-06
+L2C: 0.0001
+optimizer: adam
+Score: 7.669434547424316
+
+Trial 21 summary
+Hyperparameters:
+Dropout: 35
+L1: 1e-06
+L2: 1e-05
+L1C: 1e-05
+L2C: 0.0001
+optimizer: adam
+Score: 7.699331760406494
+
+Trial 28 summary
+Hyperparameters:
+Dropout: 50
+L1: 1e-06
+L2: 1e-06
+L1C: 1e-06
+L2C: 0.001
+optimizer: adam
+Score: 7.844420433044434
+
+Trial 18 summary
+Hyperparameters:
+Dropout: 40
+L1: 1e-06
+L2: 1e-06
+L1C: 0.0001
+L2C: 0.001
+optimizer: adam
+Score: 8.150626182556152
