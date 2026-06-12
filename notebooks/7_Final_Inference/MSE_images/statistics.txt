@@ -1,0 +1,527 @@
+============================================================
+STATISTICS REPORT FOR: MSE
+============================================================
+
+## Data and Predictions
+Loading data from: ./MSE_data
+true_train: (960000, 1), preds_train: (960000, 1)
+true_val:   (120000, 1), preds_val:   (120000, 1)
+true_test:  (120000, 1), preds_test:  (120000, 1)
+true_145:   (145, 1), preds_145:   (145, 1)
+
+
+############################################################
+# TRAIN PREDICTIONS
+############################################################
+
+MAPE train: 0.61%
+
+--- Distribution Analysis: APE (Train) ---
+============================================================
+DISTRIBUTION ANALYSIS REPORT
+============================================================
+
+1. BASIC STATISTICS
+----------------------------------------
+Sample size: 960,000
+Mean: 0.6120
+Median: 0.3273
+Std deviation: 0.8593
+Variance: 0.7384
+Min: 0.0000
+Max: 40.1740
+Range: 40.1740
+IQR: 0.5931
+
+2. DISTRIBUTION SHAPE
+----------------------------------------
+Skewness: 6.2475
+  -> Highly skewed, right (positive) skew
+Kurtosis (excess): 105.3445
+  -> Leptokurtic (heavy-tailed)
+
+3. COMPARISON WITH NORMAL DISTRIBUTION
+----------------------------------------
+
+Normality tests:
+Kolmogorov-Smirnov test: D = 0.2382, p = 0.000000
+Anderson-Darling test: A^2 = 90671.8505
+  -> Reject normality at 5% level (A^2 >= 0.7870)
+Jarque-Bera test: JB = 450139213.8343, p = 0.000000
+
+Quantile comparison (theoretical vs empirical):
+Quantile   Empirical    Normal       Difference  
+----------------------------------------------
+0.01       0.0059       -1.3870      1.3929      
+0.05       0.0300       -0.8014      0.8314      
+0.25       0.1496       0.0324       0.1171      
+0.5        0.3273       0.6120       -0.2848     
+0.75       0.7426       1.1917       -0.4490     
+0.95       2.0657       2.0255       0.0402      
+0.99       3.7898       2.6111       1.1787      
+
+4. VISUAL ANALYSIS (check generated plots)
+
+5. ADDITIONAL INSIGHTS
+----------------------------------------
+Potential outliers (IQR method): 81990 (8.54%)
+Entropy: 7.0395 bits
+Coefficient of variation: 1.4040
+
+============================================================
+ANALYSIS COMPLETE
+============================================================
+
+--- Distribution Analysis: PE (Train) ---
+============================================================
+DISTRIBUTION ANALYSIS REPORT
+============================================================
+
+1. BASIC STATISTICS
+----------------------------------------
+Sample size: 960,000
+Mean: -0.3221
+Median: -0.0481
+Std deviation: 1.0047
+Variance: 1.0093
+Min: -40.1740
+Max: 29.3522
+Range: 69.5262
+IQR: 0.8366
+
+2. DISTRIBUTION SHAPE
+----------------------------------------
+Skewness: -3.6440
+  -> Highly skewed, left (negative) skew
+Kurtosis (excess): 60.9873
+  -> Leptokurtic (heavy-tailed)
+
+3. COMPARISON WITH NORMAL DISTRIBUTION
+----------------------------------------
+
+Normality tests:
+Kolmogorov-Smirnov test: D = 0.1555, p = 0.000000
+Anderson-Darling test: A^2 = 49907.9146
+  -> Reject normality at 5% level (A^2 >= 0.7870)
+Jarque-Bera test: JB = 150900991.5403, p = 0.000000
+
+Quantile comparison (theoretical vs empirical):
+Quantile   Empirical    Normal       Difference  
+----------------------------------------------
+0.01       -3.7173      -2.6592      -1.0580     
+0.05       -2.0195      -1.9746      -0.0449     
+0.25       -0.6185      -0.9997      0.3812      
+0.5        -0.0481      -0.3221      0.2740      
+0.75       0.2181       0.3556       -0.1375     
+0.95       0.5830       1.3305       -0.7475     
+0.99       1.1693       2.0151       -0.8458     
+
+4. VISUAL ANALYSIS (check generated plots)
+
+5. ADDITIONAL INSIGHTS
+----------------------------------------
+Potential outliers (IQR method): 62782 (6.54%)
+Entropy: 7.3830 bits
+Coefficient of variation: -3.1196
+
+============================================================
+ANALYSIS COMPLETE
+============================================================
+
+--- Metrics (Train) ---
+Metrics
+MAE: 2.91
+MSE: 14.73
+RMSE: 3.84
+MAPE: 0.61%
+R2: 0.9999
+
+
+############################################################
+# VAL PREDICTIONS
+############################################################
+
+Mean APE val: 0.6095
+
+--- Distribution Analysis: APE (Val) ---
+============================================================
+DISTRIBUTION ANALYSIS REPORT
+============================================================
+
+1. BASIC STATISTICS
+----------------------------------------
+Sample size: 120,000
+Mean: 0.6095
+Median: 0.3275
+Std deviation: 0.8552
+Variance: 0.7313
+Min: 0.0000
+Max: 39.7719
+Range: 39.7719
+IQR: 0.5873
+
+2. DISTRIBUTION SHAPE
+----------------------------------------
+Skewness: 6.5218
+  -> Highly skewed, right (positive) skew
+Kurtosis (excess): 124.7084
+  -> Leptokurtic (heavy-tailed)
+
+3. COMPARISON WITH NORMAL DISTRIBUTION
+----------------------------------------
+
+Normality tests:
+Kolmogorov-Smirnov test: D = 0.2380, p = 0.000000
+Anderson-Darling test: A^2 = 11328.9955
+  -> Reject normality at 5% level (A^2 >= 0.7870)
+Jarque-Bera test: JB = 78605070.9432, p = 0.000000
+
+Quantile comparison (theoretical vs empirical):
+Quantile   Empirical    Normal       Difference  
+----------------------------------------------
+0.01       0.0057       -1.3799      1.3857      
+0.05       0.0293       -0.7971      0.8264      
+0.25       0.1488       0.0327       0.1161      
+0.5        0.3275       0.6095       -0.2820     
+0.75       0.7362       1.1863       -0.4501     
+0.95       2.0618       2.0162       0.0457      
+0.99       3.7925       2.5990       1.1935      
+
+4. VISUAL ANALYSIS (check generated plots)
+
+5. ADDITIONAL INSIGHTS
+----------------------------------------
+Potential outliers (IQR method): 10465 (8.72%)
+Entropy: 6.0478 bits
+Coefficient of variation: 1.4030
+
+============================================================
+ANALYSIS COMPLETE
+============================================================
+
+--- Distribution Analysis: PE (Val) ---
+============================================================
+DISTRIBUTION ANALYSIS REPORT
+============================================================
+
+1. BASIC STATISTICS
+----------------------------------------
+Sample size: 120,000
+Mean: -0.3186
+Median: -0.0446
+Std deviation: 1.0007
+Variance: 1.0014
+Min: -39.7719
+Max: 16.0332
+Range: 55.8052
+IQR: 0.8322
+
+2. DISTRIBUTION SHAPE
+----------------------------------------
+Skewness: -4.1251
+  -> Highly skewed, left (negative) skew
+Kurtosis (excess): 70.9283
+  -> Leptokurtic (heavy-tailed)
+
+3. COMPARISON WITH NORMAL DISTRIBUTION
+----------------------------------------
+
+Normality tests:
+Kolmogorov-Smirnov test: D = 0.1555, p = 0.000000
+Anderson-Darling test: A^2 = 6233.0775
+  -> Reject normality at 5% level (A^2 >= 0.7870)
+Jarque-Bera test: JB = 25492339.3337, p = 0.000000
+
+Quantile comparison (theoretical vs empirical):
+Quantile   Empirical    Normal       Difference  
+----------------------------------------------
+0.01       -3.7028      -2.6465      -1.0563     
+0.05       -2.0204      -1.9646      -0.0559     
+0.25       -0.6127      -0.9935      0.3808      
+0.5        -0.0446      -0.3186      0.2739      
+0.75       0.2195       0.3564       -0.1369     
+0.95       0.5866       1.3274       -0.7408     
+0.99       1.1719       2.0094       -0.8375     
+
+4. VISUAL ANALYSIS (check generated plots)
+
+5. ADDITIONAL INSIGHTS
+----------------------------------------
+Potential outliers (IQR method): 8026 (6.69%)
+Entropy: 6.3867 bits
+Coefficient of variation: -3.1412
+
+============================================================
+ANALYSIS COMPLETE
+============================================================
+
+--- Metrics (Val) ---
+Metrics
+MAE: 2.91
+MSE: 14.80
+RMSE: 3.85
+MAPE: 0.61%
+R2: 0.9999
+
+
+############################################################
+# TEST PREDICTIONS
+############################################################
+
+Mean APE test: 0.6153
+
+--- Distribution Analysis: APE (Test) ---
+============================================================
+DISTRIBUTION ANALYSIS REPORT
+============================================================
+
+1. BASIC STATISTICS
+----------------------------------------
+Sample size: 120,000
+Mean: 0.6153
+Median: 0.3280
+Std deviation: 0.8716
+Variance: 0.7598
+Min: 0.0000
+Max: 44.9654
+Range: 44.9654
+IQR: 0.5975
+
+2. DISTRIBUTION SHAPE
+----------------------------------------
+Skewness: 7.2378
+  -> Highly skewed, right (positive) skew
+Kurtosis (excess): 167.2586
+  -> Leptokurtic (heavy-tailed)
+
+3. COMPARISON WITH NORMAL DISTRIBUTION
+----------------------------------------
+
+Normality tests:
+Kolmogorov-Smirnov test: D = 0.2401, p = 0.000000
+Anderson-Darling test: A^2 = 11389.3545
+  -> Reject normality at 5% level (A^2 >= 0.7870)
+Jarque-Bera test: JB = 140913183.5661, p = 0.000000
+
+Quantile comparison (theoretical vs empirical):
+Quantile   Empirical    Normal       Difference  
+----------------------------------------------
+0.01       0.0059       -1.4125      1.4184      
+0.05       0.0300       -0.8184      0.8484      
+0.25       0.1496       0.0274       0.1222      
+0.5        0.3280       0.6153       -0.2873     
+0.75       0.7471       1.2032       -0.4561     
+0.95       2.0673       2.0490       0.0183      
+0.99       3.7925       2.6430       1.1495      
+
+4. VISUAL ANALYSIS (check generated plots)
+
+5. ADDITIONAL INSIGHTS
+----------------------------------------
+Potential outliers (IQR method): 10243 (8.54%)
+Entropy: 6.0339 bits
+Coefficient of variation: 1.4167
+
+============================================================
+ANALYSIS COMPLETE
+============================================================
+
+--- Distribution Analysis: PE (Test) ---
+============================================================
+DISTRIBUTION ANALYSIS REPORT
+============================================================
+
+1. BASIC STATISTICS
+----------------------------------------
+Sample size: 120,000
+Mean: -0.3210
+Median: -0.0468
+Std deviation: 1.0175
+Variance: 1.0353
+Min: -44.9654
+Max: 20.0878
+Range: 65.0532
+IQR: 0.8409
+
+2. DISTRIBUTION SHAPE
+----------------------------------------
+Skewness: -4.2738
+  -> Highly skewed, left (negative) skew
+Kurtosis (excess): 95.4401
+  -> Leptokurtic (heavy-tailed)
+
+3. COMPARISON WITH NORMAL DISTRIBUTION
+----------------------------------------
+
+Normality tests:
+Kolmogorov-Smirnov test: D = 0.1555, p = 0.000000
+Anderson-Darling test: A^2 = 6281.1270
+  -> Reject normality at 5% level (A^2 >= 0.7870)
+Jarque-Bera test: JB = 45905467.6373, p = 0.000000
+
+Quantile comparison (theoretical vs empirical):
+Quantile   Empirical    Normal       Difference  
+----------------------------------------------
+0.01       -3.7391      -2.6880      -1.0510     
+0.05       -2.0152      -1.9946      -0.0206     
+0.25       -0.6211      -1.0073      0.3861      
+0.5        -0.0468      -0.3210      0.2742      
+0.75       0.2198       0.3653       -0.1455     
+0.95       0.5916       1.3527       -0.7611     
+0.99       1.2055       2.0461       -0.8406     
+
+4. VISUAL ANALYSIS (check generated plots)
+
+5. ADDITIONAL INSIGHTS
+----------------------------------------
+Potential outliers (IQR method): 7774 (6.48%)
+Entropy: 6.3824 bits
+Coefficient of variation: -3.1701
+
+============================================================
+ANALYSIS COMPLETE
+============================================================
+
+--- Metrics (Test) ---
+Metrics
+MAE: 2.93
+MSE: 15.14
+RMSE: 3.89
+MAPE: 0.62%
+R2: 0.9999
+
+
+############################################################
+# 145 PREDICTIONS
+############################################################
+
+Mean APE 145: 7.3797
+
+--- Distribution Analysis: APE (145) ---
+============================================================
+DISTRIBUTION ANALYSIS REPORT
+============================================================
+
+1. BASIC STATISTICS
+----------------------------------------
+Sample size: 145
+Mean: 7.3797
+Median: 6.4231
+Std deviation: 5.8508
+Variance: 34.2324
+Min: 0.0049
+Max: 27.6275
+Range: 27.6226
+IQR: 8.4340
+
+2. DISTRIBUTION SHAPE
+----------------------------------------
+Skewness: 0.8061
+  -> Moderately skewed, right (positive) skew
+Kurtosis (excess): 0.1797
+  -> Mesokurtic (similar to normal)
+
+3. COMPARISON WITH NORMAL DISTRIBUTION
+----------------------------------------
+
+Normality tests:
+Shapiro-Wilk test: W = 0.9286, p = 0.000001
+  -> Distribution appears non-normal (p <= 0.05)
+Kolmogorov-Smirnov test: D = 0.1135, p = 0.043854
+Anderson-Darling test: A^2 = 2.7328
+  -> Reject normality at 5% level (A^2 >= 0.7670)
+Jarque-Bera test: JB = 15.4859, p = 0.000434
+
+Quantile comparison (theoretical vs empirical):
+Quantile   Empirical    Normal       Difference  
+----------------------------------------------
+0.01       0.0274       -6.2314      6.2589      
+0.05       0.3780       -2.2441      2.6221      
+0.25       2.3780       3.4333       -1.0554     
+0.5        6.4231       7.3797       -0.9565     
+0.75       10.8119      11.3260      -0.5141     
+0.95       17.5975      17.0035      0.5940      
+0.99       22.4918      20.9908      1.5010      
+
+4. VISUAL ANALYSIS (check generated plots)
+
+5. ADDITIONAL INSIGHTS
+----------------------------------------
+Potential outliers (IQR method): 1 (0.69%)
+Entropy: 2.6165 bits
+Coefficient of variation: 0.7928
+
+============================================================
+ANALYSIS COMPLETE
+============================================================
+
+--- Distribution Analysis: PE (145) ---
+============================================================
+DISTRIBUTION ANALYSIS REPORT
+============================================================
+
+1. BASIC STATISTICS
+----------------------------------------
+Sample size: 145
+Mean: -1.7618
+Median: -1.0253
+Std deviation: 9.2706
+Variance: 85.9447
+Min: -27.6275
+Max: 22.3439
+Range: 49.9715
+IQR: 13.0813
+
+2. DISTRIBUTION SHAPE
+----------------------------------------
+Skewness: -0.0321
+  -> Approximately symmetric, left (negative) skew
+Kurtosis (excess): -0.1377
+  -> Mesokurtic (similar to normal)
+
+3. COMPARISON WITH NORMAL DISTRIBUTION
+----------------------------------------
+
+Normality tests:
+Shapiro-Wilk test: W = 0.9941, p = 0.815566
+  -> Cannot reject normality (p > 0.05)
+Kolmogorov-Smirnov test: D = 0.0720, p = 0.420516
+Anderson-Darling test: A^2 = 0.4087
+  -> Cannot reject normality at 5% level (A^2 < 0.7670)
+Jarque-Bera test: JB = 0.2074, p = 0.901504
+
+Quantile comparison (theoretical vs empirical):
+Quantile   Empirical    Normal       Difference  
+----------------------------------------------
+0.01       -22.0679     -23.3285     1.2607      
+0.05       -16.5591     -17.0106     0.4515      
+0.25       -8.5828      -8.0147      -0.5680     
+0.5        -1.0253      -1.7618      0.7365      
+0.75       4.4985       4.4912       0.0074      
+0.95       14.3971      13.4871      0.9100      
+0.99       18.1096      19.8049      -1.6953     
+
+4. VISUAL ANALYSIS (check generated plots)
+
+5. ADDITIONAL INSIGHTS
+----------------------------------------
+Potential outliers (IQR method): 0 (0.00%)
+Entropy: 3.0166 bits
+Coefficient of variation: -5.2621
+
+============================================================
+ANALYSIS COMPLETE
+============================================================
+
+--- Metrics (145) ---
+Metrics
+MAE: 58.77
+MSE: 7029.82
+RMSE: 83.84
+MAPE: 7.38%
+R2: 0.9385
+
+
+============================================================
+END OF REPORT FOR: MSE
+============================================================

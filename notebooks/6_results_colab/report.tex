@@ -1,0 +1,129 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage[hidelinks]{hyperref}
+
+\title{UNET Inference \& Prediction Pipeline \\ {\normalsize AzONetV2 — Thickness Estimation from Spectra}}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This report describes the inference pipeline in \texttt{notebooks/6\_results\_colab/Predictions.py}, which loads a pre-trained UNET model to predict film thicknesses from both simulated and experimental spectral data. Predictions are generated for the full train/test/validation splits as well as external experimental 145\,nm spectra, with all results exported as NumPy arrays.
+\end{abstract}
+
+%---------------------------------------------------------------------
+\section{Introduction}
+
+The AzONetV2 project employs deep learning to estimate thin-film thickness from reflectance/transmission spectra. The script \texttt{Predictions.py} is the final stage of the pipeline: it loads the trained UNET model and runs inference on all available datasets, producing predictions that are subsequently used for error analysis and model evaluation.
+
+%---------------------------------------------------------------------
+\section{Data}
+
+\subsection{Simulated Datasets}
+
+Train, test, and validation splits are stored as HDF5 files under:
+
+\begin{verbatim}
+notebooks/3_data_simulation/NewDataAzONetV2/Sets/
+\end{verbatim}
+
+Each \texttt{.h5} file contains two datasets: \texttt{x\_total} (spectra) and \texttt{y\_total} (thickness labels). The function \texttt{load\_data\_normalization\_sample\_General} loads these splits and applies per-sample min-max normalization via \texttt{normalization\_by\_sample}.
+
+\subsection{Experimental Data}
+
+Experimental spectra for 145\,nm thin films are loaded from:
+
+\begin{verbatim}
+results/dataframe_spectrum_thickness_145_final.pkl
+\end{verbatim}
+
+Ground-truth thickness values for these samples come from differential evolution parameters stored in:
+
+\begin{verbatim}
+results/SciPy_IIM/differential_evolution_NonLinear_145F.npy
+\end{verbatim}
+
+Both datasets undergo the same per-sample normalization before inference.
+
+%---------------------------------------------------------------------
+\section{Methodology}
+
+\subsection{Per-Sample Normalization}
+
+The function \texttt{normalization\_by\_sample} applies min-max scaling independently to each sample:
+
+\[
+x_{\text{norm}} = \frac{x - \min(x)}{\max(x) - \min(x) + \epsilon}, \quad \epsilon = 10^{-6}
+\]
+
+This ensures each spectrum is normalized to the $[0, 1]$ range without cross-sample information leakage.
+
+\subsection{UNET Model}
+
+The pre-trained UNET model is loaded from:
+
+\begin{verbatim}
+notebooks/6_results_colab/models/Copia de model.keras
+\end{verbatim}
+
+An integrity check is performed by evaluating the model on the test set using \texttt{modelo\_UNET.evaluate}. The model architecture follows a standard encoder-decoder UNET design suitable for 1D spectral regression.
+
+\subsection{GPU Allocation}
+
+GPU resources are configured via TensorFlow's \texttt{set\_visible\_devices}, targeting the first available GPU device. This is essential for efficient batch inference on the full datasets.
+
+%---------------------------------------------------------------------
+\section{Predictions \& Outputs}
+
+Predictions are generated using \texttt{modelo\_UNET.predict} for all four data subsets:
+
+\begin{itemize}
+    \item \textbf{Train}: predictions on the full training split
+    \item \textbf{Test}: predictions on the held-out test split
+    \item \textbf{Validation}: predictions on the validation split
+    \item \textbf{Experimental 145\,nm}: predictions on external experimental spectra
+\end{itemize}
+
+All outputs are saved under the \texttt{MSE\_data/} directory (the prefix \texttt{MSE} is set by the \texttt{\_name} variable at the top of the script):
+
+\begin{table}[h]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{File} & \textbf{Description} \\
+\midrule
+\texttt{preds\_train.npy} & Train set predictions \\
+\texttt{y\_train.npy}     & Train set ground truth \\
+\texttt{preds\_test.npy}  & Test set predictions \\
+\texttt{y\_test.npy}      & Test set ground truth \\
+\texttt{preds\_val.npy}   & Validation set predictions \\
+\texttt{y\_val.npy}       & Validation set ground truth \\
+\texttt{preds\_145.npy}   & Experimental predictions \\
+\texttt{y\_145.npy}       & Experimental ground truth \\
+\bottomrule
+\end{tabular}
+\caption{Saved output files under \texttt{MSE\_data/}.}
+\label{tab:outputs}
+\end{table}
+
+%---------------------------------------------------------------------
+\section{Reproducibility}
+
+\begin{itemize}
+    \item \textbf{Environment}: Google Colab with GPU runtime
+    \item \textbf{TensorFlow version}: as available in the Colab environment at runtime
+    \item \textbf{Model file}: \texttt{Copia de model.keras} (pre-trained UNET)
+    \item \textbf{Seed}: no explicit random seed is set; results are deterministic given the same model weights and data
+\end{itemize}
+
+To reproduce the results, mount Google Drive, verify all input paths in the script, and execute \texttt{Predictions.py}. The output \texttt{.npy} files will be written to the \texttt{MSE\_data/} folder within the same notebook directory.
+
+\end{document}
