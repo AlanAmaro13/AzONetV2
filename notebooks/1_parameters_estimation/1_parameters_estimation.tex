@@ -1,0 +1,232 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{enumitem}
+\usepackage{graphicx}
+
+\title{\textbf{1\_parameters\_estimation} \\ Alonso's Transmittance Model Fitting}
+\author{AzONetV2}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Overview}
+
+This folder contains the fitting of experimental transmittance spectra to the theoretical model proposed by Alonso et al. (IIM --- Interference Induced Method) using three global optimization algorithms from SciPy. The production version is in {\tt Python\_Notebooks/}, using the \textbf{AmaroX} custom library.
+
+\section{Context}
+
+In the previous folder ({\tt 0\_data\_processing}), a DataFrame was created containing experimental spectra and their thicknesses. The goal here is to fit each experimental transmittance curve with the theoretical model by minimizing the Mean Square Error (MSE).
+
+\section{Transmittance Model}
+
+The Alonso model describes transmittance as a function of \textbf{13 parameters}:
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Description} \\
+\midrule
+$x$            & Wavelength [nm] \\
+$d$            & Film thickness [nm] \\
+$R_1$, $R_2$   & Surface roughness parameters \\
+$A$, $B$, $C$, $D$, $E$ & Sellmeier coefficients (background refractive index) \\
+$\alpha$, $\beta$, $\gamma$ & Absorption coefficients \\
+$n_e$          & Free carrier concentration \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The model incorporates:
+\begin{itemize}
+    \item \textbf{Sellmeier equation} for the background dielectric constant:
+    \begin{equation*}
+        \varepsilon_{1b}(x) = A + \frac{B x^2}{x^2 - C^2} + \frac{D x^2}{x^2 - E^2}
+    \end{equation*}
+    \item \textbf{Drude model} for free-carrier contribution (depends on $n_e$):
+    \begin{equation*}
+        \varepsilon_{1f} = -\frac{3182.61 \cdot n_e}{\omega^2 + \gamma^2}, \quad
+        \varepsilon_{2f} = \frac{3182.61 \cdot n_e \cdot \gamma}{\omega(\omega^2 + \gamma^2)}
+    \end{equation*}
+    where $\omega = 2\pi c \cdot 10^9 / x$ and $\gamma = 2.8 \times 10^{11} \cdot x$.
+    \item \textbf{Absorption model} with Urbach tail:
+    \begin{equation*}
+        \alpha_{\text{total}} = \kappa \frac{4\pi}{x} + \alpha_0 \exp\!\left[1240 \cdot \beta \left(\frac{1}{x} - \frac{1}{\lambda_g}\right)\right]
+    \end{equation*}
+    \item \textbf{Roughness corrections} for interfaces via scalar scattering theory.
+    \item \textbf{Glass substrate} transmittance ({\tt TexpglassO.txt}) to compute $n_g$.
+\end{itemize}
+
+The refractive index is constrained to the \textbf{physically meaningful range}: $1.8 \leq n(\lambda) \leq 2.1$.
+
+Physical constants used: $c = 3 \times 10^8$ m/s (speed of light), $\mu = 3.90 \times 10^{-4}$ m$^2$/Vs (mobility).
+
+\section{Data}
+
+\begin{itemize}
+    \item \textbf{Source}: {\tt ../../results/dataframe\_spectrum\_thickness\_145\_final.pkl}
+    \item \textbf{Samples}: 145 experimental thin-film samples (AZO --- Aluminium-doped Zinc Oxide)
+    \item \textbf{Spectrum range}: 190--1100 nm (911 points per spectrum)
+    \item \textbf{Glass transmittance}: {\tt ../../experimental\_samples/Background\_data/TexpglassO.txt}
+\end{itemize}
+
+\section{Optimization Algorithms}
+
+Three global optimization algorithms were tested, all minimizing the Mean Square Error (MSE):
+\begin{equation*}
+    \text{MSE} = \frac{1}{N}\sum_{i=1}^{N} \big(T_{\text{model}}(\lambda_i; \Theta) - T_{\text{exp}}(\lambda_i)\big)^2
+\end{equation*}
+
+\subsection{1. Basin-Hopping ({\tt basin\_hopping})}
+\begin{itemize}
+    \item \textbf{File}: {\tt 1\_SciPy\_AllSamples\_BH\_NonLinear\_Porcentual\_145F.ipynb}
+    \item \textbf{Local optimizer}: SLSQP
+    \item \textbf{Constraint}: {\tt NonlinearConstraint} on refractive index ($1.8 \leq n \leq 2.1$)
+    \item \textbf{Initial guess}: Mean values from prior EGP-GA results:
+    \begin{itemize}
+        \item $R_1 = 30.6$, $R_2 = 26.5$
+        \item $A = 2.0065$, $B = 1.574 \times 10^6$, $C = 10^7$, $D = 1.5868$, $E = 260.63$
+        \item $\alpha_0 = 5.0 \times 10^{-3}$, $\beta = 10$, $\lambda_g = 360$
+        \item $n_e = 2.1 \times 10^{26}$
+    \end{itemize}
+    \item \textbf{Bounds}: Allowed $\pm 50\%$ variation around seed values ($pl = 0.5$), $\pm$ measurement error for thickness.
+\end{itemize}
+
+\subsection{2. Differential Evolution ({\tt differential\_evolution})}
+\begin{itemize}
+    \item \textbf{File}: {\tt 2\_SciPy\_AllSamples\_DE\_NonLinear\_Porcentual\_145F.ipynb}
+    \item \textbf{Constraint}: {\tt NonlinearConstraint} on refractive index ($1.8 \leq n \leq 2.1$)
+    \item \textbf{Parallelization}: {\tt workers=-1} (uses all available CPUs)
+    \item \textbf{Stochastic}: Random seed per run ({\tt random.randint(0, 2**32 - 1)})
+    \item \textbf{Bounds}: Same $\pm 50\%$ around seeds, $\pm$ measurement error for thickness.
+\end{itemize}
+
+\subsection{3. Direct ({\tt direct})}
+\begin{itemize}
+    \item \textbf{File}: {\tt 3\_SciPy\_AllSamples\_Direct\_NonLinear\_Porcentual\_145F.ipynb}
+    \item \textbf{Constraint}: Penalty method --- Direct does not natively support {\tt NonlinearConstraint}. A wrapper function {\tt new\_error} adds a penalty term when the refractive index constraint is violated:
+    \begin{verbatim}
+    if (refractive_index(params) > 2.1) or (refractive_index(params) < 1.8):
+        _error += _error + refractive_index(params)
+    \end{verbatim}
+    \item \textbf{Fastest} but weakest results.
+\end{itemize}
+
+\section{Results}
+
+Results are saved as NumPy arrays in {\tt ../../results/SciPy\_IIM/}:
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{File} & \textbf{Algorithm} \\
+\midrule
+{\tt basin\_hopping\_NonLinear\_145F.npy} & Basin-Hopping \\
+{\tt differential\_evolution\_NonLinear\_145F.npy} & Differential Evolution \\
+{\tt direct\_NonLinear\_145F.npy} & Direct \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Each array has shape $(145, 14)$ with columns:
+\begin{verbatim}
+[SampleIndex, Thickness, R1, R2, A, B, C, D, E, alpha, beta, gamma, ne, MSE]
+\end{verbatim}
+
+\section{Comparison \& Conclusions}
+
+The notebook {\tt 4\_Comparison.ipynb} (which also generates {\tt comparativa\_optimizadores.pdf}) compares the three optimizers:
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Optimizer} & \textbf{Mean MSE} & \textbf{Execution Time} & \textbf{Quality} \\
+\midrule
+\textbf{Differential Evolution} & $\sim 0$ (best) & $\sim 4$ hours & Excellent \\
+Basin-Hopping & $\sim 5$ & $\sim 12$ hours & Moderate \\
+Direct & $\sim 8$--$30$ & $\sim 5$ minutes & Poor \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Key findings:}
+\begin{itemize}
+    \item \textbf{Differential Evolution} is the best optimizer for this problem --- it achieves the lowest MSE consistently across all samples. Its KDE density distribution is tightly centered near zero.
+    \item \textbf{Basin-Hopping} produces a normal-like distribution centered around MSE $\approx 5$, with significantly longer runtime.
+    \item \textbf{Direct} is fast but produces large errors, with a multi-modal error distribution. Not recommended for production use.
+\end{itemize}
+
+The comparison visualizations are saved in the {\tt images/} folder:
+\begin{itemize}
+    \item {\tt comparative.png} --- Scatter plot of MSE per sample for all three algorithms
+    \item {\tt kde\_optimizers.png} --- Kernel Density Estimation of the MSE distributions
+    \item {\tt final\_comparative.png} --- Bar chart of mean MSE comparison
+\end{itemize}
+
+The PDF report {\tt comparativa\_optimizadores.pdf} (generated via {\tt fpdf}) includes Spanish-language commentary alongside these figures.
+
+\section{Python\_Notebooks Subfolder}
+
+Contains {\tt .py} script versions of the three optimization notebooks, refactored to use the \textbf{AmaroX} custom library instead of inline model definitions:
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Script} & \textbf{Equivalent Notebook} \\
+\midrule
+{\tt 1\_SciPy\_AllSamples\_BH\_NonLinear\_Porcentual\_145F.py} & Notebook 1 (Basin-Hopping) \\
+{\tt 2\_SciPy\_AllSamples\_DE\_NonLinear\_Porcentual\_145F.py} & Notebook 2 (Differential Evolution) \\
+{\tt 3\_SciPy\_AllSamples\_Direct\_NonLinear\_Porcentual\_145F.py} & Notebook 3 (Direct) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+These scripts import the {\tt modelo\_transmitancia} function and other utilities from {\tt AmaroX}, making them cleaner for production use. The model equations, constraints, bounds, and output paths are identical to their notebook counterparts.
+
+\section{Test-400nm-1100nm Subfolder}
+
+This subfolder explores the effect of \textbf{restricting the fitting range} from the full spectrum (190--1100 nm) to the visible--NIR region (400--1100 nm). The low-wavelength UV tail (190--400 nm) is noisy and dominated by absorption.
+
+\subsection{Adjustment Notebook}
+\textbf{File:} {\tt Test-400nm-1100nm/Adjustment\_400nm\_1100nm.ipynb}
+
+Reruns \textbf{Differential Evolution} fitting on all 145 samples, but the MSE error function only considers wavelengths $\geq 400$ nm ({\tt y\_pred[210:]} in the 911-point array). The model, constraints, bounds, and glass data are identical to the main DE notebook. Results are saved as {\tt differential\_evolution\_NonLinear\_145F.npy} in the subfolder.
+
+\subsection{Comparison Notebook}
+\textbf{File:} {\tt Test-400nm-1100nm/Compare\_Old\_New\_Fittings.ipynb}
+
+Compares the two fitting strategies across all 145 spectra:
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{Old (190--1100 nm)} & \textbf{New (400--1100 nm)} \\
+\midrule
+Mean MSE      & $1.099$    & $1.186$ \\
+Median MSE    & $0.757$    & $0.743$ \\
+Wins (lower MSE) & \textbf{96 / 145 (66.2\%)} & 49 / 145 (33.8\%) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Takeaway:} Fitting the full 190--1100 nm range is recommended for production use. The 400--1100 nm restricted fit can serve as a sensitivity analysis but does not improve overall fitting quality.
+
+\section{Dependencies}
+\begin{itemize}
+    \item {\tt numpy}, {\tt pandas}, {\tt matplotlib}, {\tt seaborn}, {\tt scipy}
+    \item {\tt fpdf} (for PDF report generation in {\tt 4\_Comparison.ipynb})
+    \item {\tt AmaroX} (custom library, used only in {\tt Python\_Notebooks/*.py})
+\end{itemize}
+
+\end{document}
