@@ -1,0 +1,448 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{enumitem}
+\usepackage{longtable}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{float}
+
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    commentstyle=\color{codegray},
+    frame=single,
+    language=Python
+}
+
+\title{\textbf{4\_hp\_search} \\ Hyperparameter Search for \\ Deep Learning Models}
+\author{AzONetV2}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Overview}
+
+This folder contains a systematic hyperparameter search for three neural network architectures trained on synthetic transmittance spectra to predict AZO thin-film thickness. The search uses \texttt{keras\_tuner.BayesianOptimization} with the custom \textbf{AmaroX} / \textbf{AmaroXI} libraries. The overarching goal is to find the model architecture and regularization scheme that minimizes the \textbf{Mean Absolute Percentage Error (MAPE)} on a held-out validation set.
+
+All training data comes from the \texttt{3\_data\_simulation} pipeline: $\approx 1.2$M synthetic transmittance spectra ($911$ wavelength points, $190$--$1100$ nm) with known thickness values.
+
+\section{Rationale for U-NET over DNN}
+
+Deep Neural Networks (DNN) trained on flattened transmittance spectra achieved a minimum validation error of $\approx 10.5\%$ MAPE. This relatively elevated error is attributed to the fact that a transmittance spectrum possesses an \textbf{intrinsic spatial structure}: the position of each transmittance value at its corresponding wavelength uniquely defines the spectral curve. If the spectrum were randomly shuffled, the curve would be destroyed. DNN architectures treat all input neurons as independent, ignoring this spatial dependence.
+
+In contrast, \textbf{Convolutional Neural Networks} — and particularly autoencoder-like structures such as \textbf{U-NET} — apply localized filters that slide across the input, naturally exploiting spatial correlations. Among convolutional variants, U-NET architectures with nested/recurrent layers have demonstrated superior performance for regression tasks on structured 1D signals. The hypothesis is that a U-NET can learn spectral features (interference fringes, absorption edges) that depend on neighboring wavelength positions, producing more accurate thickness predictions than a flat DNN.
+
+\section{Experimental Setup}
+
+\subsection{Data}
+
+\begin{itemize}
+    \item \textbf{Source:} Synthetic spectra from \texttt{3\_data\_simulation}.
+    \item \textbf{DNN scripts} load from \texttt{data\_simulation/F2} (HDF5 format).
+    \item \textbf{U-NET scripts} load from \texttt{data\_simulation/F1} (HDF5 format).
+    \item \textbf{Format:} Each HDF5 file contains:
+    \begin{itemize}
+        \item \texttt{x\_total}: shape $(n, 911, 1)$, float32 — normalized transmittance spectra in $[0, 1]$.
+        \item \texttt{y\_total}: shape $(n, 1)$, float32 — film thickness in nm.
+    \end{itemize}
+    \item \textbf{Subset size:} $1/10$ of the full dataset per search run — approximately $108{,}000$ training / $10{,}800$ test / $1{,}200$ validation samples.
+    \item \textbf{Normalization:} Min-Max normalization to $[0, 1]$ via AmaroX utilities.
+\end{itemize}
+
+\subsection{Training Configuration}
+
+All HP search runs share the following configuration:
+\begin{itemize}
+    \item \textbf{Tuner:} \texttt{keras\_tuner.BayesianOptimization}
+    \item \textbf{Trials:} 50 per search
+    \item \textbf{Executions per trial:} 2
+    \item \textbf{Epochs:} 25 (DNN) / 10 (U-NET)
+    \item \textbf{Batch size:} 512
+    \item \textbf{Loss function:} MAE (Mean Absolute Error)
+    \item \textbf{Metric:} MAPE (Mean Absolute Percentage Error)
+    \item \textbf{Objective:} minimize \texttt{val\_mape}
+    \item \textbf{Callbacks:} Standard callbacks with patience (early stopping: 50; learning rate reduction: 1000)
+    \item \textbf{GPU:} Single GPU allocation via AmaroX \texttt{get\_gpu()}
+\end{itemize}
+
+At the end of each search, the 10 best trials are exported to a \texttt{best\_models.txt} file via \texttt{tuner.results\_summary()}.
+
+\section{Source File Structure}
+
+\begin{longtable}{lll}
+\toprule
+\textbf{Script} & \textbf{Format} & \textbf{Description} \\
+\midrule
+\multicolumn{3}{c}{\textit{0\_UsingDNN/ — Deep Neural Networks}} \\
+\midrule
+\texttt{0\_DNN\_3HL} & .ipynb only & 3 hidden layers (exploratory) \\
+\texttt{0\_DNN\_5HL} & .py + .ipynb & 5HL, searches nodes + dropout + L1L2 \\
+\texttt{0\_DNN\_5HL\_Reg} & .py + .ipynb & 5HL, fixed nodes, searches dropout + L1L2 \\
+\texttt{0\_DNN\_7HL} & .py + .ipynb & 7HL, searches nodes + dropout \\
+\texttt{0\_DNN\_7HL\_Reg} & .py + .ipynb & 7HL, fixed nodes, searches dropout + L1L2 \\
+\texttt{0\_DNN\_10HL} & .py + .ipynb & 10HL, searches nodes \\
+\texttt{0\_DNN\_10HL\_Reg} & .py + .ipynb & 10HL, fixed nodes, searches dropout + L1L2 \\
+\midrule
+\multicolumn{3}{c}{\textit{2\_UsingUNET/ — U-NET Architecture}} \\
+\midrule
+\texttt{0\_UNET\_F1\_Regularized} & .py + .ipynb & Phase 2: fix F=21, nodes=[470,340,330], search 6 regularizers \\
+\bottomrule
+\end{longtable}
+
+\section{Deep Neural Network Results}
+
+All DNN models share the same topology: input $(911,)$ is passed through $N$ hidden \texttt{Dense} layers (each with LeakyReLU activation, He Normal weight init, and optional L1/L2 regularization and dropout), terminating in a single output neuron with ReLU activation. The architecture is implemented via the AmaroX \texttt{G\_Dense} function.
+
+\subsection{5 Hidden Layers}
+
+\subsubsection*{Architecture Search (0\_DNN\_5HL.py)}
+\textbf{Search space:}
+\begin{itemize}
+    \item \texttt{Nodes-i} $\in [50, 500]$, step 50 (5 parameters, one per layer)
+    \item \texttt{Dropout} $\in [0, 50]$, step 2
+    \item \texttt{L1, L2} $\in \{10^{-6}, 10^{-5}, 10^{-4}, 10^{-3}, 10^{-2}, 10^{-1}, 1\}$
+    \item \texttt{optimizer} $\in \{\text{adam}\}$
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\caption{DNN 5HL — Top 10 Trials}
+\begin{tabular}{cclc}
+\toprule
+\textbf{\#} & \textbf{Trial} & \textbf{Nodes} & \textbf{MAPE} \\
+\midrule
+1 & 43 & [400, 50, 300, 100, 250] & 12.33\% \\
+2 & 00 & [300, 400, 500, 450, 350] & 12.63\% \\
+3 & 33 & [350, 400, 200, 100, 300] & 12.63\% \\
+4 & 39 & [100, 50, 500, 250, 400]  & 13.27\% \\
+5 & 40 & [400, 400, 350, 100, 200] & 13.85\% \\
+6 & 16 & [300, 200, 450, 50, 100]  & 13.91\% \\
+7 & 25 & [300, 400, 500, 450, 350] & 14.58\% \\
+8 & 10 & [400, 400, 500, 250, 400] & 14.62\% \\
+9 & 11 & [350, 350, 200, 450, 500] & 14.66\% \\
+10 & 45 & [100, 100, 100, 50, 300]  & 15.05\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Best result:} Nodes [400, 50, 300, 100, 250] with MAPE = 12.33\%.
+
+\subsubsection*{Regularizer Search (0\_DNN\_5HL\_Reg.py)}
+
+Fixes the best nodes from the architecture search and searches regularization parameters only:
+\begin{itemize}
+    \item \texttt{Dropout} $\in [0, 50]$, step 5
+    \item \texttt{L1, L2} $\in \{0, 10^{-6}, 10^{-5}, 10^{-4}, 10^{-3}, 10^{-2}, 10^{-1}, 1\}$
+\end{itemize}
+
+\textbf{Note:} The regularized variant did not outperform the unregularized search; the best MAPE remained $\approx 12.33\%$.
+
+\subsection{7 Hidden Layers}
+
+\subsubsection*{Architecture Search (0\_DNN\_7HL.py)}
+
+\textbf{Search space:} 7 node parameters (50--500, step 50 per layer), Dropout (0--50, step 2), no L1/L2.
+
+\begin{table}[H]
+\centering
+\caption{DNN 7HL — Top 10 Trials}
+\begin{tabular}{cclc}
+\toprule
+\textbf{\#} & \textbf{Trial} & \textbf{Nodes} & \textbf{MAPE} \\
+\midrule
+1 & 27 & [500, 300, 50, 500, 50, 400, 500] & \textbf{10.79\%} \\
+2 & 04 & [500, 250, 50, 500, 100, 350, 500] & 10.87\% \\
+3 & 26 & [500, 300, 50, 400, 100, 400, 500] & 11.00\% \\
+4 & 25 & [500, 250, 100, 500, 100, 450, 500] & 12.21\% \\
+5 & 31 & [450, 350, 300, 200, 200, 100, 400] & 12.26\% \\
+6 & 23 & [450, 500, 150, 100, 200, 350, 150] & 12.49\% \\
+7 & 42 & [350, 450, 300, 500, 50, 450, 300]  & 12.95\% \\
+8 & 05 & [400, 350, 400, 50, 350, 450, 450]  & 13.13\% \\
+9 & 18 & [450, 350, 250, 100, 200, 400, 50]  & 13.38\% \\
+10 & 14 & [100, 50, 200, 300, 100, 150, 100]  & 13.49\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Best result:} Nodes [500, 300, 50, 500, 50, 400, 500] with MAPE = \textbf{10.79\%} — an improvement over 5HL (12.33\%).
+
+\subsubsection*{Regularizer Search (0\_DNN\_7HL\_Reg.py)}
+
+Fixes the best architecture and searches Dropout + L1/L2. The top result uses the fixed nodes [500, 300, 50, 500, 50, 400, 500] with optimal regularizer values. The best MAPE is $\approx 10.79\%$, matching the unregularized result.
+
+\subsection{10 Hidden Layers}
+
+\subsubsection*{Architecture Search (0\_DNN\_10HL.py)}
+
+\textbf{Search space:} 10 node parameters (50--500, step 50 per layer), no dropout or L1/L2 search.
+
+\begin{table}[H]
+\centering
+\caption{DNN 10HL — Top 10 Trials}
+\begin{tabular}{ccp{4.5cm}c}
+\toprule
+\textbf{\#} & \textbf{Trial} & \textbf{Nodes} & \textbf{MAPE} \\
+\midrule
+1 & 27 & [500, 300, 100, 200, 450, 300, 150, 300, 300, 500] & \textbf{10.51\%} \\
+2 & 36 & [500, 250, 50, 300, 100, 200, 200, 50, 350, 250]   & 10.85\% \\
+3 & 32 & [300, 350, 250, 150, 100, 400, 350, 300, 150, 300] & 11.10\% \\
+4 & 39 & [250, 400, 150, 250, 400, 350, 250, 350, 100, 350] & 11.58\% \\
+5 & 46 & [350, 450, 150, 100, 50, 450, 350, 150, 400, 400]  & 11.78\% \\
+6 & 45 & [450, 500, 100, 400, 300, 450, 300, 300, 100, 500] & 11.78\% \\
+7 & 03 & [300, 300, 50, 500, 400, 300, 50, 450, 500, 350]   & 11.83\% \\
+8 & 10 & [300, 200, 400, 50, 200, 150, 200, 150, 350, 450]  & 12.41\% \\
+9 & 11 & [50, 50, 100, 50, 300, 500, 500, 400, 500, 150]    & 12.68\% \\
+10 & 49 & [100, 450, 300, 300, 250, 300, 150, 150, 450, 100] & 12.93\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Best result:} Nodes [500, 300, 100, 200, 450, 300, 150, 300, 300, 500] with MAPE = \textbf{10.51\%} — the best DNN result across all depths.
+
+\subsubsection*{Regularizer Search (0\_DNN\_10HL\_Reg.py)}
+
+Fixes the best 10HL architecture and searches Dropout + L1/L2. The best MAPE remained $\approx 10.51\%$, indicating that regularization did not provide additional benefit for this model on this dataset.
+
+\subsection{DNN Summary}
+
+\begin{table}[H]
+\centering
+\caption{DNN Results Across Depths}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Architecture} & \textbf{Best MAPE} & \textbf{Best Node Configuration} \\
+\midrule
+DNN 5HL  & 12.33\% & [400, 50, 300, 100, 250] \\
+DNN 7HL  & 10.79\% & [500, 300, 50, 500, 50, 400, 500] \\
+DNN 10HL & \textbf{10.51\%} & [500, 300, 100, 200, 450, 300, 150, 300, 300, 500] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Increasing depth from 5 to 10 layers provides a modest improvement from 12.33\% to 10.51\% MAPE. However, the error remains above 10\%, motivating the exploration of convolutional architectures.
+
+\section{U-NET Architecture}
+
+\subsection{Fixed Design Components}
+
+The U-NET architecture is designed to exploit the spatial structure of transmittance spectra. The following components are fixed based on physical considerations of the spectral data:
+
+\subsubsection*{U-NET Section (Convolutional Encoder-Decoder)}
+
+\begin{longtable}{llp{6cm}}
+\toprule
+\textbf{Component} & \textbf{Value} & \textbf{Rationale / Notes} \\
+\midrule
+Number of blocks $N_{\text{blocks}}$ & 3 & 3 blocks provide sufficient depth for $911 \to 1$ compression without excessive information loss \\
+Base filters $F_{\text{bloque},0}$ & Searched (Phase 1), then fixed at 21 & Doubles per block: $F_{\text{bloque},i} = 2\,F_{\text{bloque},i-1}$ \\
+Kernel sizes $K_{\text{bloque}}$ & $[150, 50, 5]$ & $K_0 = 150$ chosen from the max-min fringe distance for films 100--250 nm; smaller kernels for deeper blocks \\
+Weight initializer $I_{p,\text{bloque}}$ & He Normal & Appropriate for LeakyReLU activation \\
+Regularizers $L_{1,\text{Conv}}, L_{2,\text{Conv}}$ & Searched (Phase 2) & Applied as \texttt{keras.regularizers.L1L2} on convolutional kernel weights \\
+Pooling operation & Average Pooling &  \\
+Pool size \& Stride & 4 & Both pool and stride set to equal value \\
+Padding type & \texttt{'valid'} & Output dimension computed as:
+\begin{equation*}
+\text{Dim}_{\text{out}} = \frac{\text{Dim}_{\text{in}} - \text{Pool}}{\text{Stride}} + 1
+\end{equation*} \\
+Internal activation & LeakyReLU &  \\
+\bottomrule
+\end{longtable}
+
+\subsubsection*{DNN Head (Thickness Regression)}
+
+After the U-NET encoder-decoder processes the spectrum, the output is flattened and passed through a 3-layer Dense network:
+
+\begin{longtable}{lp{9cm}}
+\toprule
+\textbf{Component} & \textbf{Value} \\
+\midrule
+Number of hidden layers $N_{\text{capas}}$ & 3 \\
+Nodes per layer $n_i$ & Searched (Phase 1), then fixed at [470, 340, 330] (Phase 2) \\
+Dropout $D$ & Searched (both phases) \\
+Regularizers $L_1, L_2$ & Searched (Phase 2 only) \\
+Internal activation & LeakyReLU, He Normal init \\
+Output activation & ReLU (1 neuron) \\
+\bottomrule
+\end{longtable}
+
+\subsection{Two-Phase Search Strategy}
+
+The hyperparameter search for the U-NET model was conducted in \textbf{two phases}, following the method described in the thesis manuscript:
+
+\subsubsection*{Phase 1 — Architecture Discovery}
+
+\textbf{Goal:} Find the best combination of U-NET filters and DNN head nodes, without regularization.
+
+\textbf{Search space:}
+\begin{itemize}
+    \item $F_{\text{bloque},0} \in [2, 30]$, step 1 (number of base convolutional filters)
+    \item $N_{\text{capas}} = 3$ (fixed), $n_i \in [50, 500)$, step 10 (nodes per DNN layer)
+    \item $D \in [0, 50\%)$, step 5 (dropout rate)
+    \item $L_{1,\text{Conv}} = L_{2,\text{Conv}} = L_1 = L_2 = 0$ (no regularization)
+    \item 50 trials $\times$ 2 executions, 10 epochs, batch size 512
+\end{itemize}
+
+\textbf{Results} (from \texttt{models/best\_models\_unet3m.txt}):
+
+\begin{table}[H]
+\centering
+\caption{Phase 1 — Top 10 Architecture Candidates (Objective: maximize val\_accuracy)}
+\begin{tabular}{cccccc}
+\toprule
+\textbf{\#} & \textbf{Trial} & $F_{\text{bloque},0}$ & \textbf{Nodes} & \textbf{Dropout} & \textbf{Accuracy} \\
+\midrule
+1 & 187 & \textbf{21} & [470, 340, 330] & 25\% & 93.82\% \\
+2 & 042 & 25 & [190, 450, 380] & 5\%  & 92.87\% \\
+3 & 265 & 19 & [420, 290, 270] & 20\% & 91.85\% \\
+4 & 093 & 27 & [130, 150, 180] & 10\% & 91.67\% \\
+5 & 211 & 11 & [310, 420, 160] & 40\% & 91.53\% \\
+6 & 148 & 21 & [380, 470, 330] & 45\% & 91.38\% \\
+7 & 076 & 15 & [290, 320, 440] & 10\% & 90.87\% \\
+8 & 299 & 27 & [480, 210, 390] & 30\% & 90.26\% \\
+9 & 033 & 13 & [90, 460, 270]  & 35\% & 89.92\% \\
+10 & 154 & 29 & [70, 380, 490]  & 20\% & 89.66\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Best candidate:} $F = 21$, $n = [470, 340, 330]$, $D = 25\%$ with accuracy = 93.82\% (corresponding to $\approx 6.18\%$ MAPE). All top-3 candidates achieve MAPE below 10\%, already outperforming the best DNN (10.51\%).
+
+\subsubsection*{Phase 2 — Regularizer Optimization}
+
+\textbf{Goal:} Further reduce overfitting by searching regularizers on the best architecture from Phase 1.
+
+\textbf{Fixed parameters:}
+\begin{itemize}
+    \item $F_{\text{bloque},0} = 21$
+    \item $n = [470, 340, 330]$
+\end{itemize}
+
+\textbf{Search space:}
+\begin{itemize}
+    \item $D \in [0, 50)$, step 5 (dropout rate)
+    \item $L_{1,\text{Conv}} \in \{10^{-6}, 10^{-5}, 10^{-4}, 10^{-3}, 10^{-2}, 10^{-1}, 1\}$
+    \item $L_{2,\text{Conv}} \in \{10^{-6}, 10^{-5}, 10^{-4}, 10^{-3}, 10^{-2}, 10^{-1}, 1\}$
+    \item $L_1 \in \{10^{-6}, 10^{-5}, 10^{-4}, 10^{-3}, 10^{-2}, 10^{-1}, 1\}$
+    \item $L_2 \in \{10^{-6}, 10^{-5}, 10^{-4}, 10^{-3}, 10^{-2}, 10^{-1}, 1\}$
+\end{itemize}
+
+\textbf{Code:} \texttt{0\_UNET\_F1\_Regularized.py} (Colab script)
+
+\textbf{Results} (from \texttt{models/DNN\_UNET\_F1\_R/best\_models.txt}):
+
+\begin{table}[H]
+\centering
+\caption{Phase 2 — Top 10 Regularizer Candidates (Objective: minimize val\_mape)}
+\begin{tabular}{cccccccc}
+\toprule
+\textbf{\#} & \textbf{Trial} & \textbf{D} & $L_1$ & $L_2$ & $L_{1,C}$ & $L_{2,C}$ & \textbf{MAPE} \\
+\midrule
+1 & 29 & 35\% & 1e-6 & 1e-5 & 1e-6 & 1e-4 & \textbf{5.77\%} \\
+2 & 44 & 30\% & 1e-6 & 1e-6 & 1e-6 & 1e-6 & 6.88\% \\
+3 & 20 & 25\% & 1e-6 & 1e-6 & 1e-4 & 1e-5 & 6.99\% \\
+4 & 37 & 35\% & 1e-6 & 1e-5 & 1e-6 & 1e-3 & 7.10\% \\
+5 & 14 & 25\% & 1e-6 & 1e-5 & 1e-6 & 1e-4 & 7.23\% \\
+6 & 41 & 30\% & 1e-6 & 1e-6 & 1e-6 & 1e-6 & 7.64\% \\
+7 & 38 & 35\% & 1e-6 & 1e-5 & 1e-6 & 1e-4 & 7.67\% \\
+8 & 21 & 35\% & 1e-6 & 1e-5 & 1e-5 & 1e-4 & 7.70\% \\
+9 & 28 & 50\% & 1e-6 & 1e-6 & 1e-6 & 1e-3 & 7.84\% \\
+10 & 18 & 40\% & 1e-6 & 1e-6 & 1e-4 & 1e-3 & 8.15\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Best candidate:} $D = 35\%$, $L_1 = 10^{-6}$, $L_2 = 10^{-5}$, $L_{1,C} = 10^{-6}$, $L_{2,C} = 10^{-4}$ with MAPE = \textbf{5.77\%} — a further improvement over the Phase 1 result (6.18\%).
+
+\subsection{Regularizer Pattern Analysis}
+
+The Phase 2 results reveal a consistent pattern:
+\begin{itemize}
+    \item \textbf{L1 regularizers} ($L_1$, $L_{1,C}$) converge to the smallest value ($10^{-6}$) in nearly all top trials, suggesting that L1 sparsity is not beneficial for this regression task.
+    \item \textbf{L2 regularizers} ($L_2$, $L_{2,C}$) take values in $\{10^{-6}, 10^{-5}, 10^{-4}\}$, with the best result using $L_2 = 10^{-5}$ (DNN) and $L_{2,C} = 10^{-4}$ (convolutional) — a mild regularization that prevents overfitting without suppressing useful features.
+    \item \textbf{Dropout} converges to 30--35\% in the top trials, substantially higher than the Phase 1 result (25\%), suggesting the added L2 regularization allows for stronger dropout without degrading performance.
+\end{itemize}
+
+\section{Final Comparison}
+
+\begin{table}[H]
+\centering
+\caption{Best Model by Architecture}
+\begin{tabular}{lccp{6cm}}
+\toprule
+\textbf{Model} & \textbf{Best MAPE} & \textbf{Improvement} & \textbf{Key Parameters} \\
+\midrule
+DNN 5HL  & 12.33\% & baseline & Nodes [400, 50, 300, 100, 250] \\
+DNN 7HL  & 10.79\% & $-1.54$ pp & Nodes [500, 300, 50, 500, 50, 400, 500] \\
+DNN 10HL & 10.51\% & $-1.82$ pp & Nodes [500, 300, 100, 200, 450, 300, 150, 300, 300, 500] \\
+U-NET Phase 1 & $\sim$6.18\% & $-4.33$ pp & F=21, nodes [470, 340, 330], D=25\% \\
+\textbf{U-NET Phase 2} & \textbf{5.77\%} & \textbf{$-4.74$ pp} & F=21, nodes [470, 340, 330], D=35\%, L1=1e-6, L2=1e-5, L1C=1e-6, L2C=1e-4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The U-NET architecture \textbf{doubles performance} compared to the best DNN (5.77\% vs. 10.51\% MAPE), confirming the hypothesis that convolutional architectures are fundamentally better suited for learning from transmittance spectra due to their ability to capture spatial structure.
+
+\section{Implementation Notes}
+
+\subsection{Code Architecture}
+
+All scripts follow the same pattern:
+
+\begin{enumerate}
+    \item Import AmaroX utility functions: \texttt{G\_Dense}, \texttt{G\_UNET}, \texttt{load\_data\_normalization\_sample\_General}, \texttt{standard\_callbacks}, \texttt{get\_gpu}, \texttt{show\_dimensions}, \texttt{plot\_xy}.
+    \item Load and normalize a 1/10 subset of the synthetic dataset.
+    \item Allocate a GPU via \texttt{get\_gpu()}.
+    \item Create standard callbacks (early stopping + learning rate reduction).
+    \item Define a model-building function with tunable hyperparameters.
+    \item Instantiate \texttt{keras\_tuner.BayesianOptimization}.
+    \item Run \texttt{tuner.search()}.
+    \item Save the 10 best trials to a text file.
+\end{enumerate}
+
+\subsection{Custom Library Dependencies}
+
+The scripts depend on two versions of the AmaroX library:
+
+\begin{itemize}
+    \item \textbf{AmaroX} (DNN scripts): Located in \texttt{0\_UsingDNN/AmaroX/}. Provides \texttt{G\_Dense}, \texttt{data\_manipulation}, \texttt{ai\_functions}, \texttt{ai\_models}, and \texttt{utilities}.
+    \item \textbf{AmaroXI} (U-NET scripts): Located in \texttt{2\_UsingUNET/AmaroXI/}. Provides the same modules plus \texttt{UNET} (with \texttt{G\_UNET}) and \texttt{DNN} (with \texttt{G\_Dense}).
+\end{itemize}
+
+Both libraries abstract away the Keras boilerplate: \texttt{G\_Dense} creates a stack of Dense layers with consistent activation, initialization, dropout, and L1/L2 regularization. \texttt{G\_UNET} creates a U-NET encoder-decoder with configurable pooling, kernel sizes, filter counts, and regularizers.
+
+\section{Models Saved}
+
+Each search produces a \texttt{best\_models.txt} summarizing the top 10 trials. These files are organized as follows:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lp{7cm}l}
+\toprule
+\textbf{File} & \textbf{Path} & \textbf{Best MAPE} \\
+\midrule
+DNN 5HL  & \texttt{0\_UsingDNN/models/DNN\_HP\_5/best\_models.txt}  & 12.33\% \\
+DNN 7HL  & \texttt{0\_UsingDNN/models/DNN\_HP\_7/best\_models.txt}  & 10.79\% \\
+DNN 10HL & \texttt{0\_UsingDNN/models/DNN\_HP\_10/best\_models.txt} & 10.51\% \\
+U-NET Ph.1 & \texttt{2\_UsingUNET/models/best\_models\_unet3m.txt} & 93.82\% acc. \\
+U-NET Ph.2 & \texttt{2\_UsingUNET/models/DNN\_UNET\_F1\_R/best\_models.txt} & 5.77\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Dependencies}
+
+\begin{itemize}
+    \item \texttt{keras}, \texttt{keras\_tuner}
+    \item \texttt{AmaroX} / \texttt{AmaroXI} (custom libraries: \texttt{G\_Dense}, \texttt{G\_UNET}, \texttt{load\_data\_normalization\_sample\_General}, \texttt{standard\_callbacks}, \texttt{get\_gpu}, \texttt{show\_dimensions}, \texttt{plot\_xy})
+    \item \texttt{pandas}, \texttt{numpy}, \texttt{h5py}
+\end{itemize}
+
+\end{document}

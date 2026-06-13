@@ -1,0 +1,548 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{enumitem}
+\usepackage{longtable}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{float}
+
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    commentstyle=\color{codegray},
+    frame=single,
+    language=Python
+}
+
+\title{\textbf{5\_training / 2\_MSE} \\ U-NET Production Training \\ with Mean Squared Error Loss}
+\author{AzONetV2}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Overview}
+
+This folder contains the \textbf{production training run} for the best U-NET architecture identified during the hyperparameter search in \texttt{4\_hp\_search}. Unlike the HP search phase — which used 1/10 of the dataset, MAE loss, and 10 epochs — this run:
+
+\begin{itemize}
+    \item Uses the \textbf{full} synthetic dataset ($\approx 1.2$M samples).
+    \item Switches the loss function from \textbf{MAE} to \textbf{MSE} (Mean Squared Error), consistent with the physical model fitting in earlier stages.
+    \item Trains for \textbf{100 epochs} with the best architecture from Phase 2 of the HP search.
+    \item Saves the best model checkpoint based on validation MAPE.
+    \item Generates complete evaluation plots and TensorBoard logs.
+\end{itemize}
+
+The script is designed for Google Colab and loads data from the HDF5 files produced by \texttt{3\_data\_simulation}.
+
+\section{Script}
+
+\textbf{File:} \texttt{0\_UNET\_F145F2\_Colab\_Cleaned.py} (also available as \texttt{.ipynb})
+
+The script implements the following pipeline:
+
+\begin{enumerate}
+    \item Mount Google Drive.
+    \item Load train, test, and validation HDF5 files via {\tt load\_data\_normalization\_sample\_General()}.
+    \item Apply per-sample min-max normalization to $[0, 1]$.
+    \item Allocate GPU via {\tt get\_gpu(0)}.
+    \item Define the U-NET $\rightarrow$ DNN architecture with fixed best hyperparameters.
+    \item Compile with Adam optimizer, MSE loss, and MAPE+RMSE metrics.
+    \item Set random seed to 13 for reproducibility.
+    \item Train for 100 epochs with batch size 512, using early stopping and LR reduction callbacks (patience=1000, effectively disabled).
+    \item Save the best model (monitoring \texttt{val\_mape}) and the final model.
+    \item Generate MSE, MAPE, and RMSE plots over epochs.
+    \item Evaluate on the test set.
+\end{enumerate}
+
+\section{Model Architecture}
+
+The model combines a 1D U-NET encoder-decoder (convolutional section) with a Dense regression head (DNN section). Both sections use the hyperparameters discovered in Phase 2 of the HP search (see \texttt{4\_hp\_search}).
+
+\subsection{Input}
+
+\begin{itemize}
+    \item Shape: \texttt{(911, 1)} — a 1D transmittance spectrum with one channel.
+    \item Normalized to $[0, 1]$ per sample (min-max normalization).
+\end{itemize}
+
+\subsection{U-NET Section (Convolutional Encoder-Decoder)}
+
+The U-NET is implemented via the custom function \texttt{G\_UNET}, which takes the following configuration:
+
+\begin{table}[H]
+\centering
+\caption{U-NET Configuration}
+\begin{tabular}{llp{6cm}}
+\toprule
+\textbf{Parameter} & \textbf{Value} & \textbf{Description} \\
+\midrule
+\texttt{layers} & 21 & Base number of filters. Doubles per block: $F_i = 21 \cdot 2^i$. \\
+\texttt{unet\_kernel} & {\tt [150, 50, 5]} & Kernel sizes for the 3 encoder blocks (and corresponding decoder blocks). \\
+\texttt{WIC} & \texttt{'he\_normal'} & Weight initializer for all convolutional layers. \\
+\texttt{WRC} & {\tt L1L2(l1=1e-6, l2=1e-4)} & Kernel regularizer: mild L2 on convolutional weights, negligible L1. \\
+\texttt{pad\_type} & \texttt{'valid'} & Zero-padding not used; output dimensions computed by:
+\begin{equation*}
+\text{Dim}_{\text{out}} = \frac{\text{Dim}_{\text{in}} - \text{Pool}}{\text{Stride}} + 1
+\end{equation*} \\
+\texttt{unet\_act\_func} & \texttt{'leaky\_relu'} & Activation for all intermediate U-NET layers. \\
+\texttt{pool} & 4 & Pooling window size. \\
+\texttt{stride} & 4 & Stride for pooling and upsampling. \\
+\texttt{final\_func\_act} & \texttt{'leaky\_relu'} & Activation after the final 1×1 convolution. \\
+\texttt{stride\_conv} & 1 & Stride for all convolutional layers. \\
+\texttt{pool\_op} & \texttt{'AP'} & Average Pooling (not MaxPooling). \\
+\texttt{pool\_bool} & \texttt{True} & Apply pooling in encoder blocks. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection*{Encoder Path}
+
+Three downsampling blocks ({\tt UNET\_ConvDown}), each consisting of:
+
+\begin{enumerate}
+    \item \texttt{Conv1D(filters, kernel, strides=1, padding='same')}
+    \item \texttt{BatchNormalization}
+    \item \texttt{Activation(leaky\_relu)}
+    \item \texttt{Conv1D(filters, kernel, strides=1, padding='same')}
+    \item \texttt{BatchNormalization}
+    \item \texttt{Activation(leaky\_relu)}
+    \item \texttt{AveragePooling1D(pool=4, stride=4, padding='valid')}
+\end{enumerate}
+
+The number of filters is scaled as $F \cdot 2^i$ where $F = 21$ and $i = 0, 1, 2$ for each successive block.
+
+\textbf{Block 0:} 21 filters, kernel 150, input shape (911, 1) \\
+\textbf{Block 1:} 42 filters, kernel 50, input shape (227, 21) after pooling \\
+\textbf{Block 2:} 84 filters, kernel 5, input shape (56, 42) after pooling
+
+At each block, the pre-pooling activation is stored as a \textbf{skip connection} for the decoder.
+
+\subsubsection*{Bottleneck}
+
+The bottleneck processes the encoder's final output \textbf{without pooling}:
+
+\begin{enumerate}
+    \item \texttt{Conv1D(168, kernel=5, strides=1, padding='same')}
+    \item \texttt{BatchNormalization}
+    \item \texttt{Activation(leaky\_relu)}
+    \item \texttt{Conv1D(168, kernel=5, strides=1, padding='same')}
+    \item \texttt{BatchNormalization}
+    \item \texttt{Activation(leaky\_relu)}
+\end{enumerate}
+
+Input shape: (13, 84). Filters: $21 \cdot 2^3 = 168$.
+
+\subsubsection*{Decoder Path}
+
+Three upsampling blocks ({\tt UNET\_ConvUp\_US}), each:
+
+\begin{enumerate}
+    \item Upsamples the previous output to match the corresponding encoder skip connection's dimensions.
+    \item If dimensions don't divide evenly, applies \texttt{ZeroPadding1D} to match.
+    \item \textbf{Concatenates} the upsampled tensor with the skip connection.
+    \item Applies the same two-convolution pattern ({\tt Conv1D} → {\tt BN} → {\tt Act}) × 2.
+\end{enumerate}
+
+Filters are scaled in reverse: $F \cdot 2^i$ for $i = 1, 0$ (128 $\rightarrow$ 64 $\rightarrow$ 32 actually... let me recalculate: $21 \cdot 2^2 = 84$, $21 \cdot 2^1 = 42$, $21 \cdot 2^0 = 21$).
+
+\textbf{Block 2 (decoder):} 84 filters, kernel 5, concatenates with encoder block 1 skip \\
+\textbf{Block 1 (decoder):} 42 filters, kernel 50, concatenates with encoder block 0 skip \\
+\textbf{Block 0 (decoder):} 21 filters, kernel 150, concatenates with original input
+
+\subsubsection*{Final Convolution}
+
+\begin{equation*}
+    \texttt{Conv1D(filters=1, kernel\_size=1, activation='leaky\_relu')}
+\end{equation*}
+
+This produces the U-NET output: a tensor of shape \texttt{(911, 1)} — the same dimensions as the input. A {\tt BatchNormalization} + {\tt Activation(leaky\_relu)} is applied before flattening.
+
+\subsection{DNN Head (Thickness Regression)}
+
+After the U-NET processes the spectrum, its output is flattened and passed through a 3-layer Dense network for thickness prediction:
+
+\begin{table}[H]
+\centering
+\caption{DNN Head Configuration}
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Nodes & [470, 340, 330] \\
+Dropout & 35\% \\
+L1 regularizer & $10^{-6}$ \\
+L2 regularizer & $10^{-5}$ \\
+Internal activation & LeakyReLU \\
+Weight initializer & He Normal \\
+Use bias & True \\
+Output & 1 neuron, ReLU \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Each Dense layer is followed by Dropout and BatchNormalization. The DNN head is implemented via the custom \texttt{G\_Dense} function.
+
+\subsection{Architecture Summary}
+
+\begin{verbatim}
+Input (911, 1)
+  |
+  ├── U-NET Encoder-Decoder
+  |     Block 0 (21 filt, k=150) ──┐
+  |     Block 1 (42 filt, k=50)  ──┤ skip connections
+  |     Block 2 (84 filt, k=5)   ──┤
+  |     Bottleneck (168 filt)      │
+  |     Block 2 Up (84 filt)     ──┘
+  |     Block 1 Up (42 filt)
+  |     Block 0 Up (21 filt)
+  |     Final Conv (1 filt, k=1)
+  |
+  └── Flatten
+       |
+       └── DNN Head
+             Dense(470) → BN → Dropout(35%)
+             Dense(340) → BN → Dropout(35%)
+             Dense(330) → BN → Dropout(35%)
+             Dense(1, relu)
+                  |
+                  └── Thickness (nm)
+\end{verbatim}
+
+\section{Data Pipeline}
+
+The script defines and uses the following data-loading functions:
+
+\subsection{Per-Sample Normalization}
+
+\begin{lstlisting}
+def normalization_by_sample(x):
+    mi = np.min(x, axis=1, keepdims=True)
+    ma = np.max(x, axis=1, keepdims=True)
+    return (x - mi) / (ma - mi + 1e-6)
+\end{lstlisting}
+
+Each spectrum is independently normalized to $[0, 1]$ using its own minimum and maximum. This is important because transmittance spectra vary in overall scale depending on film thickness.
+
+\subsection{HDF5 Loading}
+
+\begin{lstlisting}
+def load_data_normalization_sample_General(folder, size=None, names=None):
+    # Scans folder for train.h5, test.h5, val.h5
+    # Loads x_total (spectra) and y_total (thickness)
+    # Applies per-sample normalization to x
+    # Returns (x_train, y_train, x_test, y_test, x_val, y_val)
+\end{lstlisting}
+
+\textbf{Data source:} \texttt{/content/drive/MyDrive/AzONet\_New\_145/notebooks/3\_data\_simulation/NewDataAzONetV2/Sets/}
+
+This folder contains the HDF5 files produced by the merge-split step of the data simulation pipeline, with approximately:
+
+\begin{itemize}
+    \item \texttt{train.h5}: $\sim$960,000 samples (80\%)
+    \item \texttt{test.h5}: $\sim$120,000 samples (10\%)
+    \item \texttt{val.h5}: $\sim$120,000 samples (10\%)
+\end{itemize}
+
+\section{Training Configuration}
+
+\begin{table}[H]
+\centering
+\caption{Training Hyperparameters}
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Loss function & \textbf{Mean Squared Error} (MSE):
+\begin{equation*}
+\mathcal{L} = \frac{1}{N}\sum_{i=1}^{N}(y_i^{\text{pred}} - y_i^{\text{true}})^2
+\end{equation*} \\
+Metrics & MAPE (Mean Absolute Percentage Error), RMSE (Root Mean Squared Error) \\
+Optimizer & Adam (default learning rate: 0.001) \\
+Batch size & 512 \\
+Epochs & 100 \\
+Random seed & 13 ({\tt keras.utils.set\_random\_seed(13)}) \\
+Shuffle & True (per epoch) \\
+\midrule
+\multicolumn{2}{c}{\textit{Callbacks (effectively disabled with patience=1000)}} \\
+\midrule
+EarlyStopping & Monitors {\tt val\_mape}, mode='min', patience=1000, restore\_best\_weights=True \\
+ReduceLROnPlateau & Monitors {\tt val\_mape}, factor=0.8, patience=1000, min\_lr=1e-6 \\
+ModelCheckpoint & Saves best model as \texttt{UNET-F145F2-New.keras}, monitors {\tt val\_mape}, mode='min' \\
+CSVLogger & Saves epoch metrics to \texttt{training.log} \\
+TensorBoard & Logs histograms to \texttt{logs/} directory \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Why MSE Instead of MAE?}
+
+In the hyperparameter search (\texttt{4\_hp\_search}), the models were trained with MAE loss and optimized for MAPE. In this production run, the loss is switched to \textbf{MSE} — Mean Squared Error. This choice is motivated by consistency with the rest of the pipeline:
+
+\begin{itemize}
+    \item The Differential Evolution fitting in \texttt{1\_parameters\_estimation} minimizes MSE between model and experimental spectra.
+    \item The data simulation in \texttt{3\_data\_simulation} generates spectra from MSE-optimized parameters.
+    \item Training the ML model with the same objective (MSE) aligns the learning signal with the data generation process.
+\end{itemize}
+
+The MAPE metric is still tracked for interpretability and comparison.
+
+\section{Training Results}
+
+The model was trained for 100 epochs on the full dataset. The training log is available in \texttt{models/UNET-F145F2-New/training.log}.
+
+\subsection{Best Model (Epoch 39)}
+
+The best validation performance (lowest \texttt{val\_mape}) was achieved at epoch 39 and saved via checkpoint:
+
+\begin{table}[H]
+\centering
+\caption{Best Model — Epoch 39 (saved as UNET-F145F2-New.keras)}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{Training} & \textbf{Validation} \\
+\midrule
+MSE (nm$^2$) & 699.75 & \textbf{18.28} \\
+MAPE (\%)  & 4.76\% & \textbf{0.61\%} \\
+RMSE (nm)  & 26.39 & \textbf{3.85} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Final Model (Epoch 99)}
+
+After 100 epochs, the model had overfitted significantly to the training set:
+
+\begin{table}[H]
+\centering
+\caption{Final Model — Epoch 99}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{Training} & \textbf{Validation} \\
+\midrule
+MSE (nm$^2$) & 660.20 & 260.79 \\
+MAPE (\%)  & 4.60\% & 2.20\% \\
+RMSE (nm)  & 25.58 & 15.96 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Training Dynamics}
+
+\begin{table}[H]
+\centering
+\caption{Selected Epochs from Training Log}
+\begin{tabular}{ccccccc}
+\toprule
+\textbf{Epoch} & \textbf{Train MSE} & \textbf{Train MAPE} & \textbf{Train RMSE} & \textbf{Val MSE} & \textbf{Val MAPE} & \textbf{Val RMSE} \\
+\midrule
+0  & 178,780 & 48.70\% & 422.8 & 20,029  & 20.62\% & 141.5 \\
+1  & 2,718   & 9.95\%  & 52.1  & 862     & 6.51\%  & 29.4  \\
+2  & 1,553   & 8.06\%  & 39.4  & 457     & 4.10\%  & 21.4  \\
+12 & 799     & 5.18\%  & 28.2  & 1,634   & 4.52\%  & 40.4  \\
+22 & 731     & 4.92\%  & 27.0  & 35.3    & 0.88\%  & 5.8   \\
+39 & 700     & 4.76\%  & 26.4  & \textbf{18.3} & \textbf{0.61\%} & \textbf{3.9} \\
+50 & 689     & 4.69\%  & 26.2  & 23.3    & 0.79\%  & 4.4   \\
+70 & 673     & 4.63\%  & 25.8  & 484     & 2.08\%  & 21.9  \\
+80 & 669     & 4.62\%  & 25.7  & 1,784   & 4.11\%  & 42.2  \\
+99 & 660     & 4.60\%  & 25.6  & 261     & 2.20\%  & 16.0  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection*{Observations}
+
+\begin{enumerate}
+    \item \textbf{Rapid initial learning:} In the first epoch, MSE drops from 178,780 to 2,718 — a two-orders-of-magnitude reduction. By epoch 2, validation MAPE is already at 4.1\%.
+    \item \textbf{Overfitting onset:} After epoch $\sim$50, training metrics continue improving steadily (train MAPE from 4.69\% to 4.60\%) while validation metrics oscillate and trend upward (val MAPE from 0.79\% to 2.20\%).
+    \item \textbf{Validation instability:} The validation loss shows high variance epoch-to-epoch (val MSE oscillates between 18 and 6,146), likely due to the large batch size (512) relative to the validation set size, or because the validation set contains rare spectral patterns not well represented in the training distribution.
+    \item \textbf{Best epoch (39):} The optimal trade-off between underfitting and overfitting occurs at epoch 39, with validation MAPE of 0.61\% and validation RMSE of 3.85 nm. This is consistent with the typical U-shaped validation curve expected in deep learning.
+\end{enumerate}
+
+\section{Output Files}
+
+All outputs are saved in \texttt{models/UNET-F145F2-New/}:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{File} & \textbf{Description} \\
+\midrule
+\texttt{UNET-F145F2-New.keras} & Best model weights (epoch 39, minimum \texttt{val\_mape}) \\
+\texttt{model.keras} & Final model weights (epoch 99) \\
+\texttt{model.png} & Model architecture diagram (via \texttt{keras.utils.plot\_model}) \\
+\texttt{training.log} & CSV log of all 100 epochs \\
+\texttt{mae.png} & Training vs validation MSE over epochs \\
+\texttt{mape.png} & Training vs validation MAPE over epochs \\
+\texttt{rmse.png} & Training vs validation RMSE over epochs \\
+\texttt{logs/train/} & TensorBoard event files (training metrics) \\
+\texttt{logs/validation/} & TensorBoard event files (validation metrics) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Comparison with HP Search}
+
+\begin{table}[H]
+\centering
+\caption{HP Search (4\_hp\_search) vs Production Training (5\_training/2\_MSE)}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Aspect} & \textbf{HP Search Phase 2} & \textbf{Production Training} \\
+\midrule
+Dataset size & 1/10 subset (108k/11k/1.2k) & Full dataset (960k/120k/120k) \\
+Loss function & MAE & \textbf{MSE} \\
+Metric tracked & MAPE & MAPE, RMSE \\
+Epochs & 10 & 100 \\
+Batch size & 512 & 512 \\
+Best val MAPE & 5.77\% & \textbf{0.61\%} \\
+Best val RMSE & — & 3.85 nm \\
+Overfitting & Not observed (only 10 epochs) & After epoch 50 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The production training achieves dramatically better validation MAPE (0.61\% vs 5.77\%), primarily due to:
+\begin{enumerate}
+    \item \textbf{More data:} 10× larger training set reduces overfitting in early epochs.
+    \item \textbf{More epochs:} 100 epochs allow the model to converge further.
+    \item \textbf{MSE loss:} Squared-error loss penalizes large deviations more aggressively, potentially driving the model to a better optimum for this task.
+\end{enumerate}
+
+However, the switch to MSE may also contribute to the observed overfitting after epoch 50, as MSE amplifies the influence of outlier spectra in the training set.
+
+\section{Conclusion}
+
+The U-NET architecture with the hyperparameters discovered in \texttt{4\_hp\_search} (F=21, nodes [470,340,330], L1C=1e-6, L2C=1e-4, L1=1e-6, L2=1e-5, D=35\%), when trained on the full 1.2M-sample synthetic dataset with MSE loss for 40 epochs, achieves:
+
+\begin{itemize}
+    \item \textbf{Validation MAPE: 0.61\%} — average prediction error under 1\% of the true thickness value.
+    \item \textbf{Validation RMSE: 3.85 nm} — root mean squared thickness error under 4 nm.
+\end{itemize}
+
+These results validate the two-phase HP search strategy and demonstrate that convolutional architectures (U-NET) can effectively learn the inverse mapping from transmittance spectra to film thickness.
+
+\section{Comparison: First Version (MAE Loss)}
+
+Before the MSE production run, an initial training was performed using \textbf{MAE loss} — the same loss function used during the hyperparameter search. This run provides a baseline for evaluating the impact of switching to MSE.
+
+\subsection{First Version Configuration}
+
+\textbf{File:} \texttt{1\_firstVersion/0\_UNET\_F145F2.py}
+
+\begin{table}[H]
+\centering
+\caption{First Version Training Configuration}
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Loss function & \textbf{MAE} (Mean Absolute Error):
+\begin{equation*}
+\mathcal{L} = \frac{1}{N}\sum_{i=1}^{N}|y_i^{\text{pred}} - y_i^{\text{true}}|
+\end{equation*} \\
+Architecture & Identical to 2\_MSE: F=21, kernels [150,50,5], nodes [470,340,330], D=35\%, L1/L2=1e-6/1e-5, L1C/L2C=1e-6/1e-4 \\
+Library & AmaroXI (imported via {\tt from AmaroXI.AmaroX.UNET import *}) \\
+Data source & \texttt{0\_data\_simulation/F145F} \\
+Epochs & 100 \\
+Batch size & 512 \\
+Seed & 13 \\
+Optimizer & Adam (lr=0.001) \\
+Metrics & MAPE, RMSE \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{First Version Training Results}
+
+\begin{table}[H]
+\centering
+\caption{First Version — Selected Epochs}
+\begin{tabular}{ccccccc}
+\toprule
+\textbf{Epoch} & \textbf{Train MAE} & \textbf{Train MAPE} & \textbf{Train RMSE} & \textbf{Val MAE} & \textbf{Val MAPE} & \textbf{Val RMSE} \\
+\midrule
+0  & 226.3 & 33.20\% & 407.7 & 14.0 & 4.58\% & 28.9 \\
+1  & 31.9  & 9.19\%  & 45.0  & 19.1 & 7.13\% & 34.8 \\
+14 & 22.3  & 5.87\%  & 28.4  & 7.2  & 1.79\% & 8.5  \\
+17 & 21.9  & 5.79\%  & 28.0  & \textbf{5.8} & \textbf{1.13\%} & \textbf{7.1} \\
+50 & 21.3  & 5.70\%  & 27.7  & 6.0  & 1.28\% & 7.7  \\
+80 & 20.9  & 5.57\%  & 27.1  & 46.9 & 6.38\% & 64.6 \\
+99 & 21.2  & 5.65\%  & 27.5  & 18.3 & 3.99\% & 32.4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Best performance:} Epoch 17 with val\_mape = 1.13\%, val\_mae = 5.76 nm, val\_rmse = 7.13 nm.
+
+\subsection{Head-to-Head Comparison}
+
+\begin{table}[H]
+\centering
+\caption{MAE vs. MSE — Best Validation Performance}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{1\_firstVersion (MAE)} & \textbf{2\_MSE (MSE)} \\
+\midrule
+Loss function & $|y - \hat{y}|$ & $(y - \hat{y})^2$ \\
+Best epoch & 17 & 39 \\
+Best Val MAPE & 1.13\% & \textbf{0.61\%} \\
+Best Val RMSE & 7.13 nm & \textbf{3.85 nm} \\
+Best Val MAE & 5.76 nm & — (not tracked) \\
+Val MAE at best MAPE epoch & 5.76 nm & — (MSE=18.28 nm$^2$) \\
+Convergence speed & Faster (best at epoch 17) & Slower (best at epoch 39) \\
+Overfitting onset & $\sim$epoch 20 & $\sim$epoch 50 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Analysis}
+
+Switching from MAE to MSE loss yields a \textbf{46\% relative improvement} in MAPE (from 1.13\% to 0.61\%) and a \textbf{46\% relative improvement} in RMSE (from 7.13 nm to 3.85 nm). Several factors may explain this:
+
+\begin{enumerate}
+    \item \textbf{Squared penalty:} MSE overweights large errors ($\propto \epsilon^2$), which forces the optimizer to focus on outlier spectra — the most difficult cases — driving the model to learn features that generalize better.
+    \item \textbf{Gradient magnitude:} MAE has constant gradient magnitude ($\pm 1$), while MSE gradient scales with error ($2\epsilon$). As the model improves, MSE gradients become smaller near the optimum, allowing finer convergence (but also risking gradient vanishing).
+    \item \textbf{Consistency with pipeline:} The Differential Evolution fitting and data simulation stages both minimize MSE, creating a training signal aligned with the data generation process.
+\end{enumerate}
+
+Both runs exhibit significant \textbf{validation variance} (loss oscillating by an order of magnitude epoch-to-epoch), suggesting:
+\begin{itemize}
+    \item The validation set may contain rare spectral patterns not well represented in training.
+    \item Batch size 512 produces noisy gradient estimates on the validation set.
+    \item Further regularization or data augmentation could improve stability.
+\end{itemize}
+
+Both models overfit eventually, but the MSE run plateaus later (epoch 50 vs. epoch 20), likely because the squared-error surface is smoother and less prone to sharp overfitting than the absolute-error surface.
+
+\section{Conclusion}
+
+The two-phase training strategy — first with MAE (baseline), then with MSE (improved) — demonstrates that the choice of loss function significantly impacts regression accuracy for this inverse problem. The best model achieves:
+
+\begin{itemize}
+    \item \textbf{Validation MAPE: 0.61\%} — average prediction error under 1\% of true thickness.
+    \item \textbf{Validation RMSE: 3.85 nm} — root mean squared thickness error under 4 nm.
+\end{itemize}
+
+These results validate the end-to-end pipeline: experimental data processing $\rightarrow$ DE parameter fitting $\rightarrow$ GMM data simulation $\rightarrow$ U-NET HP search $\rightarrow$ production training, achieving a practical thin-film thickness prediction system from transmittance spectra.
+
+\section{Dependencies}
+
+\begin{itemize}
+    \item \texttt{tensorflow} (2.x), \texttt{keras}
+    \item \texttt{h5py} (HDF5 data loading)
+    \item \texttt{numpy}, \texttt{pandas}
+    \item \texttt{matplotlib}, \texttt{seaborn}
+    \item \texttt{google.colab} (Colab-specific: drive mount, GPU)
+    \item \texttt{AmaroXI} (custom library, used only in 1\_firstVersion)
+\end{itemize}
+
+\end{document}

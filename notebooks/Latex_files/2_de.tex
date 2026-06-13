@@ -1,0 +1,200 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    commentstyle=\color{codegray},
+    frame=single
+}
+
+\title{\textbf{2\_de} \\ Differential Evolution Fitting Analysis}
+\author{AzONetV2}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Overview}
+
+This folder contains the analysis of thin-film transmittance fitting results obtained via \textbf{Differential Evolution (DE)}, a global optimization algorithm. All generated data is organized under {\tt data\_results/}. The code exists as both a production Python script ({\tt 0\_comparison\_dist.py}) and a Jupyter notebook ({\tt 0\_comparison\_dist.ipynb}).
+
+\section{Data Input}
+
+\subsection{DE Fitting Results}
+Loaded from {\tt ../../results/SciPy\_IIM/differential\_evolution\_NonLinear\_145F.npy} --- a $(145, 14)$ NumPy array with columns:
+\begin{verbatim}
+[SampleIndex, d, R1, R2, A, B, C, D, E, alpha, beta, gamma, ne, MSE]
+\end{verbatim}
+where $d$ is thickness (nm), $R_1$ and $R_2$ are surface roughness parameters, $A$--$E$ are Sellmeier coefficients, $\alpha$, $\beta$, $\gamma$ are absorption coefficients, $n_e$ is free-electron concentration, and MSE is the Mean Square Error.
+
+\subsection{Experimental Data}
+Loaded from {\tt ../../results/dataframe\_spectrum\_thickness\_145\_final.pkl} --- contains 145 samples with columns: Nombre, Nombre-Arc, Espesor, Error, Error Porcentual, and Espectro (911 wavelength points, 190--1100 nm).
+
+\section{Transmittance Model}
+
+The code re-implements the full Alonso model with the following physical components:
+
+\begin{itemize}
+    \item \textbf{Sellmeier equation} for bandgap refractive index:
+    \begin{equation*}
+        \varepsilon_{1b}(x) = A + \frac{B x^2}{x^2 - C^2 + 10^{-6}} + \frac{D x^2}{x^2 - E^2 + 10^{-6}}
+    \end{equation*}
+    \item \textbf{Drude model} for free-electron effects:
+    \begin{align*}
+        \varepsilon_{1f} &= -\frac{3182.61 \cdot n_e}{\omega^2 + \gamma^2} \\
+        \varepsilon_{2f} &= \frac{3182.61 \cdot n_e \cdot \gamma}{\omega (\omega^2 + \gamma^2)}
+    \end{align*}
+    where $\omega = 2\pi c \cdot 10^9 / x$, $\gamma = 2.8 \times 10^{11} \cdot x$, $c = 3 \times 10^8$ m/s, and $\mu = 3.90 \times 10^{-4}$ m$^2$/Vs.
+    \item \textbf{Absorption} via Urbach tail.
+    \item \textbf{Surface roughness} via scalar scattering theory ($\sigma_1$ at air/film interface, $\sigma_2$ at film/glass interface).
+    \item \textbf{Multi-layer interference} (film on glass substrate, including glass transmittance from {\tt TexpglassO.txt}).
+    \item \textbf{Refractive index constraint}: $1.8 \leq n(\lambda) \leq 2.1$.
+\end{itemize}
+
+\section{Analysis Steps}
+
+\subsection{1. Spectrum Comparison Plots}
+For each of the 145 samples, the code generates an overlay plot of the experimental transmittance spectrum vs. the model prediction using the fitted parameters. Each plot is saved as {\tt data\_results/comparison/\{n\}.png} (0--144).
+
+\subsection{2. 3×3 Grid Overviews}
+The 145 individual comparison images are arranged into 3×3 grids. Since $145 = 16 \times 9 + 1$, the script produces \textbf{17 grids}: 16 full 3×3 grids and 1 final grid padded with 8 blank (white) spaces. These are saved in {\tt data\_results/comparison\_grids/}.
+
+\subsection{3. MSE and Thickness Distributions}
+Histograms and KDE plots of the MSE error and fitted thickness:
+\begin{itemize}
+    \item MSE histogram (1-unit bins) --- {\tt dist/ECM\_DE.png}
+    \item MSE KDE density with $\mu$ and $\delta$ annotations --- {\tt dist/error\_kde.png}
+    \item Thickness histograms at bin widths of 450, 200, 100, and 50 nm (range 100--1500 nm)
+    \item Thickness KDE with $\pm 1\sigma$ lines
+    \item Thickness histogram with 5 region dividers at 100, 250, 600, 950, 1100, and 1500 nm
+\end{itemize}
+
+\subsection{4. Statistical Analysis --- {\tt analyze\_distribution()}}
+For each of the 13 fitted parameters, this function computes and saves:
+\begin{itemize}
+    \item \textbf{Basic statistics}: mean, median, std, variance, min, max, range, IQR
+    \item \textbf{Distribution shape}: skewness and kurtosis (with interpretation)
+    \item \textbf{Normality tests}:
+    \begin{itemize}
+        \item Shapiro-Wilk test
+        \item Kolmogorov-Smirnov test
+        \item Anderson-Darling test (with 5\% critical value comparison)
+        \item Jarque-Bera test
+    \end{itemize}
+    \item \textbf{Quantile comparison}: empirical vs. theoretical normal at $q = 0.01, 0.05, 0.25, 0.50, 0.75, 0.95, 0.99$
+    \item \textbf{Outlier detection} via IQR method ($1.5 \times$ IQR)
+    \item \textbf{Entropy} (bits) and coefficient of variation
+    \item \textbf{6-panel diagnostic figure}: histogram + normal PDF overlay, Q-Q plot, box plot, ECDF vs CDF, moments bar chart, summary statistics table
+\end{itemize}
+
+Each parameter's report is saved as {\tt analysis\_\{param\}.txt} and {\tt analysis\_\{param\}.png} in its own subfolder under {\tt data\_results/distribution\_analysis/}:
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Subfolder} \\
+\midrule
+Thickness $d$               & {\tt thickness\_r/} \\
+Roughness $\sigma_1$        & {\tt roughness\_R1/} \\
+Roughness $\sigma_2$        & {\tt roughness\_R2/} \\
+Sellmeier $A$               & {\tt sellmeier\_A/} \\
+Sellmeier $B$               & {\tt sellmeier\_B/} \\
+Sellmeier $C$               & {\tt sellmeier\_C/} \\
+Sellmeier $D$               & {\tt sellmeier\_D/} \\
+Sellmeier $E$               & {\tt sellmeier\_E/} \\
+Refractive index $n(\lambda)$ & {\tt refractive\_index\_n/} \\
+Absorption $\alpha_0$       & {\tt absorption\_alpha/} \\
+Absorption $\beta$          & {\tt absorption\_beta/} \\
+Absorption $\lambda_g$      & {\tt absorption\_lambda/} \\
+Free carriers $n_e$         & {\tt free\_carriers\_ne/} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{5. Gaussian Mixture Model (GMM)}
+The thickness distribution is modeled using a GMM with the number of components ($K$) selected via BIC (Bayesian Information Criterion), testing $K = 1, \dots, 12$. The optimal $K$ is printed along with the fitted means, covariances, and mixing weights.
+
+\subsection{6. Region-Wise Analysis}
+Samples are partitioned into \textbf{5 thickness intervals}:
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Region} & \textbf{Range} & \textbf{Count} \\
+\midrule
+$R_1$ & 100--250 nm  & (saved in {\tt samples\_per\_region.txt}) \\
+$R_2$ & 250--600 nm  & \\
+$R_3$ & 600--950 nm  & \\
+$R_4$ & 950--1100 nm & \\
+$R_5$ & 1100--1500 nm & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For each region, the code computes and saves (in {\tt bins/}):
+\begin{itemize}
+    \item {\tt bin\_index\_\{k\}.npy} --- indices of samples in the region
+    \item {\tt region\_\{k\}.npy} --- fitted parameters for samples in the region
+    \item {\tt min\_max\_mean\_std\_\{k\}.npy} --- array with [min, max, mean, std] per parameter
+    \item {\tt all\_metrics\_\{k\}.npy} --- comprehensive metrics: min, max, mean, std, median, Q25, Q75, IQR, skewness, kurtosis, outlier count
+\end{itemize}
+
+These metrics are also rendered as PrettyTable tables and exported as LaTeX code to {\tt data\_results/latex\_tables/latex\_bin\_\{k\}.txt}.
+
+\subsection{7. Ridge Plots}
+For each parameter, a ridge plot (joyplot) is generated showing the KDE distribution across the 5 thickness regions, colored by a viridis palette. Individual ridge plots are saved in {\tt data\_results/ridge\_plot/}. Composite grid images combining related parameters are saved in {\tt data\_results/ridge\_plot\_comparison/}:
+\begin{itemize}
+    \item {\tt combined\_rugosidades.png} --- $d$, $\sigma_1$, $\sigma_2$ (1×3)
+    \item {\tt combined\_absorcion.png} --- $\alpha_0$, $\beta$, $\lambda_g$, $n_e$ (2×2)
+    \item {\tt combined\_sellmeier.png} --- $A$, $B$, $C$, $D$, $E$, $n(\lambda)$ (2×3)
+\end{itemize}
+
+\section{Output Directory Structure}
+
+\begin{verbatim}
+data_results/
+├── comparison/                  # 145 experimental vs. fitted PNGs
+├── comparison_grids/            # 17 grid_*.png (3×3 grids)
+├── dist/                        # MSE and thickness histograms/KDEs
+├── dist_f/                      # Parameter distribution KDEs
+├── distribution_analysis/       # 13 subfolders (txt reports + png figs)
+├── ridge_plot/                  # 23 ridge plots
+├── ridge_plot_comparison/       # 3 composite grid images
+├── latex_tables/                # 5 LaTeX tables (one per region)
+└── samples_per_region.txt       # Sample count per thickness interval
+\end{verbatim}
+
+\section{Pre-computed Data ({\tt bins/})}
+\begin{itemize}
+    \item {\tt bin\_index\_\{0..4\}.npy} --- sample indices per region
+    \item {\tt region\_\{0..4\}.npy} --- DE parameters per region
+    \item {\tt min\_max\_mean\_std\_\{0..4\}.npy} --- basic statistics per region
+    \item {\tt all\_metrics\_\{0..4\}.npy} --- full statistical metrics per region
+\end{itemize}
+
+\section{Dependencies}
+\begin{itemize}
+    \item {\tt numpy}, {\tt pandas}, {\tt matplotlib}, {\tt seaborn}
+    \item {\tt scipy}, {\tt scipy.stats} ({\tt skew}, {\tt kurtosis}, {\tt norm}, {\tt shapiro}, {\tt kstest}, {\tt anderson}, {\tt jarque\_bera})
+    \item {\tt sklearn.mixture} ({\tt GaussianMixture})
+    \item {\tt PIL} (Pillow, for image grid generation)
+    \item {\tt prettytable} (for formatted tables and LaTeX export)
+    \item {\tt os}, {\tt glob}, {\tt time}
+\end{itemize}
+
+\end{document}

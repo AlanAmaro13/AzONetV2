@@ -1,0 +1,594 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{longtable}
+
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    commentstyle=\color{codegray},
+    frame=single,
+    language=Python
+}
+
+\title{\textbf{3\_data\_simulation} \\ Synthetic Dataset Generation via \\ Gaussian Mixture Models}
+\author{AzONetV2}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Overview}
+
+This folder implements a complete pipeline for \textbf{synthetic data generation}. The goal is to produce a large-scale dataset of transmittance spectra that statistically mimics the 145 real experimental measurements, enabling training of machine learning models for thin-film characterization.
+
+The core idea: the Differential Evolution fitting results from {\tt 2\_de/bins/} provide per-region parameter distributions (13 parameters each). A \textbf{Gaussian Mixture Model (GMM)} is fitted to each parameter distribution, and new samples are drawn from these GMMs to generate \textbf{240,000 synthetic transmittance spectra per thickness region} (5 regions, $\approx$1.2M total). The final dataset is split into Train (80\%), Test (10\%), and Validation (10\%) sets in HDF5 format.
+
+\section{Pipeline Architecture}
+
+\begin{figure}[htbp]
+\centering
+\small
+\begin{verbatim}
+notebooks/2_de/bins/region_{0..4}.npy   ── DE-fitted params, 13 columns per region
+          │
+          ▼
+1_DataSimulationForEachBin_{0..4}.py (×5) ── Colab, identical except bint=0..4
+          │
+          ├── Phase 1: GMM(p → 3 comp) → 3000 values per param
+          │            Sellmeier (A–E) rejection-sampled: 1.8 ≤ n(λ) ≤ 2.1
+          │            Saves → data/R{bint+1}/*.npy (13 files × 3000 values)
+          │
+          ├── Phase 2: For 240k iterations:
+          │              pick_one(thickness, R1, R2, A, B, C, D, E,
+          │                       alpha, beta, lambda, ne)
+          │              → modelo_transmitancia(911 pts)
+          │              → DataFrame row (Espectro, Espesor, R1, R2,
+          │                                Sellmeier, Absorcion, ne)
+          │            Shuffle → bin_{bint}.parquet (~240k rows)
+          │
+          ▼
+data/R{1..5}/*.npy                       ── GMM parameter pools
+NewDataAzONetV2/bin_{0..4}.parquet       ── Simulated spectra + params
+          │
+          ▼
+2_Figures_Colab.py                       ── Ridge plots: ρ (DE-original) vs ρₛ (simulated)
+          │                                per parameter × 5 regions
+          │                                + spectrum samples (R₁, R₃, R₅)
+          │                                + thickness histogram comparison
+          ▼
+images/ridger_plot/*.png                 ── 13 ridge plots + 3 composites
+images/spectrum_thickness/*.png          ── 3 sample spectra + histograms
+          │
+          ▼
+3_join_split_merge_Colab.py              ── Concat 5×~240k = ~1.2M rows
+          │                                Shuffle → Final_Dataset.parquet
+          │                                Extract x (n,911,1) + y (n,1)
+          │                                80/10/10 split → HDF5
+          ▼
+NewDataAzONetV2/Final_Dataset.parquet    ── ~1.2M merged
+NewDataAzONetV2/Sets/
+  ├── train.h5   (~960k,  x_total.shape=(n,911,1), y_total.shape=(n,1))
+  ├── test.h5    (~120k)
+  └── val.h5     (~120k)
+\end{verbatim}
+\end{figure}
+
+\section{Source Files}
+
+\begin{longtable}{lp{10cm}}
+\toprule
+\textbf{File} & \textbf{Description} \\
+\midrule
+\multicolumn{2}{c}{\textit{Python Scripts (production, Colab)}} \\
+\midrule
+{\tt Python\_Notebooks/1\_*\_Bin\_0.py} & Simulate \textbf{Region R}$_1$ (100--250 nm) \\
+{\tt Python\_Notebooks/1\_*\_Bin\_1.py} & Simulate \textbf{Region R}$_2$ (250--600 nm) \\
+{\tt Python\_Notebooks/1\_*\_Bin\_2.py} & Simulate \textbf{Region R}$_3$ (600--950 nm) \\
+{\tt Python\_Notebooks/1\_*\_Bin\_3.py} & Simulate \textbf{Region R}$_4$ (950--1100 nm) \\
+{\tt Python\_Notebooks/1\_*\_Bin\_4.py} & Simulate \textbf{Region R}$_5$ (1100--1500 nm) \\
+{\tt Python\_Notebooks/2\_Figures\_Colab.py} & Ridge plots, spectrum samples, thickness comparison \\
+{\tt Python\_Notebooks/3\_join\_split\_merge\_Colab.py} & Merge 5 bins, shuffle, Train/Test/Val split \\
+\midrule
+\multicolumn{2}{c}{\textit{Jupyter Notebooks (interactive)}} \\
+\midrule
+{\tt 1\_*\_Bin\_\{0..4\}\_Colab.ipynb} (×5) & Notebook versions of the bin scripts \\
+{\tt 2\_Figures\_Colab.ipynb} & Notebook version of figures \\
+{\tt 3\_join\_split\_merge\_Colab.ipynb} & Notebook version of merge/split \\
+\bottomrule
+\end{longtable}
+
+\section{Physical Model}
+
+The Alonso transmittance model re-implemented in each bin script is identical to the one used in {\tt 1\_parameters\_estimation} and {\tt 2\_de}, with one key difference: it \textbf{returns all intermediate parameters} alongside the spectrum.
+
+\subsection{Model Equations}
+
+\subsubsection*{Frequency and Damping}
+\begin{align*}
+    \omega(x) &= 2\pi c \cdot 10^9 \,/\, x \\
+    \gamma(x) &= 2.8 \times 10^{11} \cdot x
+\end{align*}
+where $x$ is wavelength in nm, $c = 3 \times 10^8$ m/s.
+
+\subsubsection*{Dielectric Function}
+\textbf{Drude (free carriers):}
+\begin{align*}
+    \varepsilon_{1f} &= -\frac{3182.61 \cdot n_e}{\omega^2 + \gamma^2} \\[4pt]
+    \varepsilon_{2f} &= \frac{3182.61 \cdot n_e \cdot \gamma}{\omega(\omega^2 + \gamma^2)}
+\end{align*}
+
+\textbf{Sellmeier (background):}
+\begin{equation*}
+    \varepsilon_{1b}(x) = A + \frac{B x^2}{x^2 - C^2 + 10^{-6}} + \frac{D x^2}{x^2 - E^2 + 10^{-6}}
+\end{equation*}
+
+\textbf{Total dielectric constants:}
+\begin{align*}
+    \varepsilon_1 &= \varepsilon_{1f} + \varepsilon_{1b} \\
+    \varepsilon_2 &= \varepsilon_{2f} + 0
+\end{align*}
+
+\subsubsection*{Refractive Index and Extinction Coefficient}
+\begin{align*}
+    n &= \frac{1}{\sqrt{2}} \sqrt{\varepsilon_1 + \sqrt{\varepsilon_1^2 + \varepsilon_2^2}} + 10^{-6} \\[4pt]
+    \kappa &= \frac{1}{\sqrt{2}} \sqrt{-\varepsilon_1 + \sqrt{\varepsilon_1^2 + \varepsilon_2^2}}
+\end{align*}
+
+\subsubsection*{Effective Refractive Index (Scalar Scattering Theory)}
+\begin{equation*}
+    n_{\text{eff}} = \sqrt{\frac{n^2 + 1}{2}}
+\end{equation*}
+
+\subsubsection*{Transmission Coefficients (with roughness)}
+\begin{align*}
+    T_1 &= \exp\!\left[-\frac{1}{2}\left(\frac{2\pi R_1 (n_{\text{eff}} - 1)}{x}\right)^2\right] \cdot \frac{4n}{(n+1)^2} \\[4pt]
+    T_2 &= \exp\!\left[-\frac{1}{2}\left(\frac{2\pi R_2 (n_{\text{eff}} - 1)}{x}\right)^2\right] \cdot \frac{4n_g n^2}{(n+n_g)^2} \\[4pt]
+    T_3 &= \frac{4n_g^2}{n_g(1+n_g)^2}
+\end{align*}
+
+\subsubsection*{Reflection Coefficients (with roughness)}
+\begin{align*}
+    R_1 &= \exp\!\left[-2\left(\frac{2\pi R_1 n}{x}\right)^2\right] \cdot \frac{(n-1)^2}{(n+1)^2} \\[4pt]
+    R_2 &= \exp\!\left[-2\left(\frac{2\pi R_2 n}{x}\right)^2\right] \cdot \frac{(n-n_g)^2}{(n+n_g)^2} \\[4pt]
+    R_{21} &= \frac{(n-n_g)^2}{(n+n_g)^2}, \qquad
+    R_3 = \frac{(n_g-1)^2}{(n_g+1)^2}
+\end{align*}
+
+\subsubsection*{Absorption (Urbach Tail)}
+\begin{equation*}
+    \alpha_{\text{total}} = \kappa \frac{4\pi}{x} + \alpha_0 \exp\!\left[1240 \cdot \beta \left(\frac{1}{x} - \frac{1}{\lambda_g}\right)\right]
+\end{equation*}
+
+\subsubsection*{Phase and Thin-Film Interference}
+\begin{align*}
+    \phi &= \frac{4\pi n d}{x} \\[4pt]
+    T_f &= \frac{T_1 T_2 \cdot e^{-\alpha d}}{1 - 2\sqrt{R_1 R_2}\,\cos\phi \cdot e^{-\alpha d} + R_1 R_2 \cdot e^{-2\alpha d}}
+\end{align*}
+where exponentials are clipped to $[-700, 700]$ for numerical stability.
+
+\subsubsection*{Total Transmittance (including glass back-reflection)}
+\begin{equation*}
+    T = \frac{T_3}{1 - R_{21}R_3} \cdot T_f \cdot 100
+\end{equation*}
+
+\subsubsection*{Glass Substrate Refractive Index}
+\begin{equation*}
+    n_g = \frac{1}{T_{\text{glass}}} + \sqrt{\frac{1}{T_{\text{glass}}^2} - 1}
+\end{equation*}
+where $T_{\text{glass}}$ is read from {\tt TexpglassO.txt} (911 wavelength points, 190--1100 nm).
+
+\subsubsection*{Refractive Index Constraint}
+Throughout the simulation, the Sellmeier coefficients must satisfy:
+\begin{equation*}
+    1.8 \leq n(\lambda) = \sqrt{\varepsilon_{1b}(\lambda)} \leq 2.1
+\end{equation*}
+evaluated at 911 points in $\lambda \in [190, 1100]$ nm. This constraint is enforced by \textbf{rejection sampling} during the GMM synthesis phase.
+
+\subsection{Model Return Signature}
+
+Unlike the fitting scripts in {\tt 1\_parameters\_estimation} and {\tt 2\_de}, the model here returns \textbf{all} parameters alongside the spectrum:
+\begin{lstlisting}
+return T, d, R1, R2, [A,B,C,D,E], [alpha,beta,gamma], ne
+\end{lstlisting}
+This allows the synthetic dataset to store every parameter for each generated spectrum.
+
+\section{Phase 1 — Gaussian Mixture Model Fitting}
+
+\subsection{Region-Specific Input}
+
+Each bin script loads its region's DE-fitted parameters from {\tt 2\_de/bins/region\_\{bint\}.npy}, where {\tt bint} $\in \{0, 1, 2, 3, 4\}$ corresponds to:
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{cllc}
+\toprule
+\textbf{bint} & \textbf{Region} & \textbf{Range} & \textbf{Column 0 (Thickness) bounds} \\
+\midrule
+0 & R$_1$ & 100--250 nm  & [100, 250] \\
+1 & R$_2$ & 250--600 nm  & [250, 600] \\
+2 & R$_3$ & 600--950 nm  & [600, 950] \\
+3 & R$_4$ & 950--1100 nm & [950, 1100] \\
+4 & R$_5$ & 1100--1500 nm & [1100, 1500] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Each {\tt region\_\{bint\}.npy} array has shape $(n_{\text{samples}}, 13)$ with columns:
+\begin{verbatim}
+[d, R1, R2, A, B, C, D, E, alpha, beta, gamma, ne, MSE]
+\end{verbatim}
+Note: MSE is loaded but \textbf{not used} for simulation.
+
+\subsection{GMM Function}
+
+The function {\tt GMM(data, max\_gaussians=10)}:
+
+\begin{enumerate}
+    \item Reshapes input to $(n, 1)$.
+    \item For $K = 1, 2, \dots, \text{max\_gaussians}$, fits a {\tt GaussianMixture(covariance\_type='full', random\_state=1360)} and records the BIC.
+    \item Selects $K_{\text{opt}} = \arg\min_K \text{BIC}(K)$.
+    \item Refits the GMM with $K_{\text{opt}}$ components.
+    \item Extracts: {\tt means\_\{K×1\}}, {\tt covariances\_\{K×1×1\}}, {\tt weights\_\{K\}}.
+    \item Computes: $\delta_i = \sqrt{\text{cov}_{i}}$ and $\text{FWHM}_i = 2\sqrt{2\ln 2} \cdot \delta_i$.
+    \item Appends {\tt [means, std\_devs, weights]} to {\tt table\_data} for later PrettyTable export.
+    \item Returns {\tt [means, std\_devs, weights, min(data), max(data), gmm\_optimal]}.
+\end{enumerate}
+
+In practice, each parameter uses {\tt max\_gaussians=3} (the function signature defaults to 10 but is called with 3).
+
+\subsection{GMM\_Model — Synthetic Data Generation}
+
+The function {\tt GMM\_Model(t\_values, means, std\_devs, weights, min\_value, max\_value, score, n=5000)}:
+
+\begin{enumerate}
+    \item For each GMM component $i$, draws $n \cdot w_i$ samples from $\mathcal{N}(\mu_i, \delta_i^2)$.
+    \item Concatenates all component samples.
+    \item \textbf{If {\tt t\_values} is provided} (used for thickness): clamps data to $[\text{t\_values}[0], \text{t\_values}[1]]$.
+    \item \textbf{Otherwise}: clamps data to $[\text{min\_value}, \text{max\_value}]$.
+    \item Returns the clamped data.
+\end{enumerate}
+
+\subsection{GMM\_pipeline}
+
+A convenience wrapper:
+\begin{lstlisting}
+def GMM_pipeline(data, max_gaussians=10, t_values=[]):
+    _dist = GMM(data=data, max_gaussians=max_gaussians)
+    simulated_data, gmm_optimal = GMM_Model(t_values, *_dist)
+    return simulated_data
+\end{lstlisting}
+
+\subsection{Per-Parameter Fitting}
+
+For each of the 13 parameters in the region, the script calls:
+\begin{lstlisting}
+thickness = GMM_pipeline(data=param[:,0], max_gaussians=3,
+                         t_values=[t_list[bint], t_list[bint+1]])
+r1  = GMM_pipeline(data=param[:,1], max_gaussians=3)
+r2  = GMM_pipeline(data=param[:,2], max_gaussians=3)
+A   = GMM_pipeline(data=param[:,3], max_gaussians=3)
+B   = GMM_pipeline(data=param[:,4], max_gaussians=3)
+C   = GMM_pipeline(data=param[:,5], max_gaussians=3)
+D   = GMM_pipeline(data=param[:,6], max_gaussians=3)
+E   = GMM_pipeline(data=param[:,7], max_gaussians=3)
+alpha = GMM_pipeline(data=param[:,8], max_gaussians=3)
+beta  = GMM_pipeline(data=param[:,9], max_gaussians=3)
+lamda = GMM_pipeline(data=param[:,10], max_gaussians=3)
+ne    = GMM_pipeline(data=param[:,11], max_gaussians=3)
+\end{lstlisting}
+Only thickness receives {\tt t\_values} for region clamping; all others use {\tt [min, max]} from the data.
+
+\subsection{Sellmeier Rejection Sampling}
+
+After generating 3000 values each for A, B, C, D, and E independently, the script performs \textbf{rejection sampling} to obtain 3000 \textit{valid} (A,B,C,D,E) tuples:
+
+\begin{lstlisting}
+x = np.linspace(190e-9, 1101e-9, 911)
+ABCDE = []
+while len(ABCDE) < 3000:
+    A = pick_one(pool_A)
+    B = pick_one(pool_B)
+    C = pick_one(pool_C)
+    D = pick_one(pool_D)
+    E = pick_one(pool_E)
+    n_min, n_max = refractive_index(x, A, B, C, D, E)
+    if 1.8 <= n_min and n_max <= 2.1:
+        ABCDE.append((A, B, C, D, E))
+
+ABCDE = np.array(ABCDE)         # shape (3000, 5)
+A, B, C, D, E = ABCDE.T         # each shape (3000,)
+\end{lstlisting}
+
+The individual A--E pools are then \textbf{overwritten} with these constrained tuples. This ensures that when parameters are randomly sampled in Phase 2, the Sellmeier combination always produces a physically meaningful refractive index.
+
+\subsection{Saving Parameter Pools}
+
+The 13 simulated parameter arrays are saved to {\tt data/R\{bint+1\}/}:
+\begin{lstlisting}
+names = ['thickness', 'r1', 'r2', 'A', 'B', 'C', 'D', 'E',
+         'alpha', 'beta', 'lambda', 'ne']
+values = [thickness, r1, r2, A, B, C, D, E,
+          alpha, beta, lamda, ne]
+for k, v in enumerate(values):
+    np.save(main_path + '/.../data/R{}/{}'.format(bint+1, names[k]), v)
+\end{lstlisting}
+
+\section{Phase 2 — Transmittance Spectrum Generation}
+
+With 3000 parameter values for each of the 13 parameters in a bin:
+
+\begin{lstlisting}
+x = np.linspace(190, 1101, 911)
+_final = []
+
+for i in tqdm(range(int(240e3)), desc='Sample Generation'):
+    d = pick_one(thickness)
+    R1, R2 = pick_one(r1), pick_one(r2)
+    sellmeier = [pick_one(A), pick_one(B), pick_one(C),
+                 pick_one(D), pick_one(E)]
+    absorcion = [pick_one(alpha), pick_one(beta), pick_one(lamda)]
+    ne_val = pick_one(ne)
+
+    T, d_out, R1_out, R2_out, sell_out, abs_out, ne_out = \
+        modelo_transmitancia(x, d, R1, R2, *sellmeier, *absorcion, ne_val)
+
+    if np.any(np.isnan(T)):
+        continue
+
+    df = pd.DataFrame({
+        'Espectro':   [T],
+        'Espesor':    d_out,
+        'R1':         R1_out,
+        'R2':         R2_out,
+        'Sellmeier':  [sell_out],
+        'Absorcion':  [abs_out],
+        'ne':         ne_out
+    })
+    _final.append(df)
+
+df_final = pd.concat(_final, ignore_index=True)
+df_final = df_final.sample(frac=1).reset_index(drop=True)
+df_final.to_parquet(main_path + '/.../bin_{}.parquet'.format(bint))
+\end{lstlisting}
+
+Key details:
+\begin{itemize}
+    \item {\tt pick\_one = lambda x: np.random.choice(x)} — each parameter is sampled \textbf{independently} from its pool.
+    \item NaN spectra are skipped ({\tt continue}).
+    \item The final DataFrame is \textbf{shuffled} before saving.
+    \item Each bin produces $\approx$240,000 rows. Total across 5 bins: $\approx$1,200,000 rows.
+\end{itemize}
+
+\section{Phase 3 — Figures (2\_Figures\_Colab.py)}
+
+\subsection{Ridge Plots}
+
+For each of the 12 parameters, a 5-row ridge plot is generated. Each row corresponds to one thickness region and displays \textbf{two overlaid KDEs}:
+
+\begin{itemize}
+    \item \textbf{Blue} ($\rho$): the original DE-fitted parameter distribution from {\tt 2\_de/bins/region\_\{i\}.npy}.
+    \item \textbf{Red} ($\rho_s$): the simulated GMM distribution from {\tt data/R\{i+1\}/*.npy}.
+\end{itemize}
+
+The ridge plots use the functions:
+\begin{lstlisting}
+def plot_kde_normalized(ax, data, color, alpha=0.4, lw=1, label=''):
+    data = data[~np.isnan(data)]
+    sns.kdeplot(data=data, ax=ax, fill=True, alpha=alpha,
+                linewidth=lw, color=color,
+                clip=[np.min(data), np.max(data)], label=label)
+\end{lstlisting}
+
+For the \textbf{refractive index} ridge plot, an additional loop computes $n(\lambda) = \sqrt{\text{Sellmeier}}$ for all 3000 simulated tuples in each region and compares against the original $n(\lambda)$ from the DE-fitted Sellmeier coefficients.
+
+All ridge plots are saved to {\tt images/ridger\_plot/} as {\tt \{name\}.png}. Composite grids are generated for:
+\begin{itemize}
+    \item {\tt combined\_rugosidades.png} — thickness, $\sigma_1$, $\sigma_2$ (1×3)
+    \item {\tt combined\_absorcion.png} — $\alpha_0$, $\beta$, $\lambda_g$, $n_e$ (2×2)
+    \item {\tt combined\_sellmeier.png} — A, B, C, D, E, $n(\lambda)$ (2×3)
+\end{itemize}
+
+\subsection{Spectrum Samples}
+
+Three representative transmittance spectra are plotted from different regions with thickness annotations:
+\begin{itemize}
+    \item Region R$_1$ (bin 0): {\tt r1.png}
+    \item Region R$_3$ (bin 2): {\tt r3.png}
+    \item Region R$_5$ (bin 4): {\tt r5.png}
+\end{itemize}
+A composite 1×3 grid is also generated as {\tt combined\_spectrums.png}.
+
+\subsection{Thickness Histograms}
+
+Two overlaid 50 nm-bin histograms are generated:
+\begin{itemize}
+    \item {\tt allthickness.png} — the combined simulated thickness of all $\approx$1.2M samples.
+    \item {\tt 145thickness.png} — the original 145 experimental thicknesses.
+\end{itemize}
+Both include vertical dashed lines at 100, 250, 600, 950, 1100, and 1500 nm marking region boundaries. A 1×2 grid composite is saved as {\tt combined\_hist\_thickness.png}.
+
+\section{Phase 4 — Merge \& Split (3\_join\_split\_merge\_Colab.py)}
+
+\subsection{Load and Concatenate}
+
+\begin{lstlisting}
+d1 = pd.read_parquet('.../bin_0.parquet')
+d2 = pd.read_parquet('.../bin_1.parquet')
+# ... d3, d4, d5 ...
+
+df_final = pd.concat([d1, d2, d3, d4, d5], ignore_index=True)
+# df_final.shape → (~1,200,000, 7)
+
+df_final = df_final.sample(frac=1).reset_index(drop=True)
+df_final.to_parquet('.../Final_Dataset.parquet')
+\end{lstlisting}
+
+\subsection{Convert to ML-Ready Format}
+
+The {\tt Espectro} column contains 911-length arrays. These are reshaped:
+
+\begin{lstlisting}
+x = df_final['Espectro']            # Series of arrays
+n, m = x.shape[0], len(x[0])        # n ~ 1.2M, m = 911
+x = np.concatenate(x)               # flatten
+x = x.reshape(n, m, 1)              # (n, 911, 1) — ML convention
+
+y = np.array(df_final['Espesor'], dtype=np.float32)
+y = y.reshape(-1, 1)                # (n, 1)
+\end{lstlisting}
+
+\subsection{Train/Test/Val Split}
+
+The function {\tt data\_to\_TrainTestVal(data, folder\_path, p\_train=0.80, p\_test=0.10)}:
+
+\begin{enumerate}
+    \item Takes {\tt x} and {\tt y} arrays.
+    \item Splits sequentially (after shuffle):
+    \begin{itemize}
+        \item {\tt x\_train = x[ : int(n * 0.80) ]}, \quad {\tt y\_train = y[ : int(n * 0.80) ]}
+        \item {\tt x\_test = x[ int(n * 0.80) : int(n * 0.90) ]}, \quad {\tt y\_test = y[ int(n * 0.80) : int(n * 0.90) ]}
+        \item {\tt x\_val = x[ int(n * 0.90) : ]}, \quad {\tt y\_val = y[ int(n * 0.90) : ]}
+    \end{itemize}
+    \item Calls {\tt to\_h5()} for each split.
+\end{enumerate}
+
+The function {\tt to\_h5(x, y, file\_name)}:
+\begin{lstlisting}
+def to_h5(x, y, file_name):
+    if not os.path.exists(file_name):
+        f = h5py.File(file_name, 'w')
+        f.create_dataset('x_total', data=x, chunks=True,
+                         maxshape=(None, x.shape[1], x.shape[2]))
+        f.create_dataset('y_total', data=y, chunks=True,
+                         maxshape=(None, y.shape[1]))
+        f.close()
+\end{lstlisting}
+
+The {\tt maxshape=(None, ...)} with {\tt chunks=True} allows incremental appending for future data augmentation.
+
+\subsection{Final Split Summary}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Split} & \textbf{Fraction} & \textbf{Approx. Samples} & \textbf{File} \\
+\midrule
+Train & 80\%  & $\sim$960,000 & {\tt Sets/train.h5} \\
+Test  & 10\%  & $\sim$120,000 & {\tt Sets/test.h5} \\
+Val   & 10\%  & $\sim$120,000 & {\tt Sets/val.h5} \\
+\midrule
+Total & 100\% & $\sim$1,200,000 & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Output Directory Structure}
+
+\begin{verbatim}
+data/                                    # GMM parameter pools (3000 values each)
+├── R1/   thickness.npy, r1.npy, r2.npy, A.npy, B.npy, C.npy, D.npy, E.npy,
+│         alpha.npy, beta.npy, lambda.npy, ne.npy
+├── R2/   (same)
+├── R3/   (same)
+├── R4/   (same)
+└── R5/   (same)
+
+images/
+├── ridger_plot/                         # 13 ridge plots + 3 composites
+│   ├── thickness.png, sigma1.png, sigma2.png
+│   ├── A.png, B.png, C.png, D.png, E.png
+│   ├── alpha.png, beta.png, lambda.png, ne.png, indice.png
+│   ├── rugosidades/     (1thickness.png, sigma1.png, sigma2.png)
+│   ├── Absorcion/       (alpha, beta, lambda, ne)
+│   ├── Sellmeier/       (A, B, C, D, E, indice)
+│   ├── combined_rugosidades.png, combined_absorcion.png,
+│   │   combined_sellmeier.png
+├── spectrum_thickness/
+│   ├── r1.png, r3.png, r5.png
+│   ├── allthickness.png, 145thickness.png
+│   └── combined_spectrums.png
+└── combined_hist_thickness.png
+
+NewDataAzONetV2/
+├── bin_0.parquet          (~240k, R₁)
+├── bin_1.parquet          (~240k, R₂)
+├── bin_2.parquet          (~240k, R₃)
+├── bin_3.parquet          (~240k, R₄)
+├── bin_4.parquet          (~240k, R₅)
+├── Final_Dataset.parquet  (~1.2M, merged + shuffled)
+└── Sets/
+    ├── train.h5   (80% · ~960k)
+    ├── test.h5    (10% · ~120k)
+    └── val.h5     (10% · ~120k)
+\end{verbatim}
+
+\section{Parquet Column Schema}
+
+Each {\tt bin\_\{N\}.parquet} and {\tt Final\_Dataset.parquet} has the following columns:
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Column} & \textbf{Type} & \textbf{Shape / Description} \\
+\midrule
+{\tt Espectro}   & list of float & 911 transmittance values (\%) \\
+{\tt Espesor}    & float         & Film thickness (nm) \\
+{\tt R1}         & float         & Roughness $\sigma_1$ (air/film) \\
+{\tt R2}         & float         & Roughness $\sigma_2$ (film/glass) \\
+{\tt Sellmeier}  & list of float & [A, B, C, D, E] \\
+{\tt Absorcion}  & list of float & [$\alpha$, $\beta$, $\lambda_g$] \\
+{\tt ne}         & float         & Free carrier concentration \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{HDF5 Dataset Schema}
+
+Each {\tt .h5} file contains two datasets:
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{llll}
+\toprule
+\textbf{Dataset} & \textbf{Shape} & \textbf{Dtype} & \textbf{Description} \\
+\midrule
+{\tt x\_total} & {\tt (n, 911, 1)} & float32 & Transmittance spectra \\
+{\tt y\_total} & {\tt (n, 1)}      & float32 & Film thickness (nm) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Both datasets use {\tt chunks=True} with {\tt maxshape=(None, ...)} to allow incremental data appending.
+
+\section{Comparison: Simulated vs. Original Distribution}
+
+The ridge plots in {\tt 2\_Figures\_Colab.py} provide a qualitative check of the GMM simulation quality. For each parameter, the original DE-fitted KDE (blue, $\rho$) and the GMM-simulated KDE (red, $\rho_s$) are overlaid across all 5 thickness regions. The visual agreement between the blue and red curves in each panel indicates how well the GMM captures the statistical properties of the original parameter distributions.
+
+\section{Dependencies}
+
+\begin{itemize}
+    \item {\tt numpy}, {\tt pandas}, {\tt matplotlib}, {\tt seaborn}
+    \item {\tt scipy}, {\tt scipy.stats} ({\tt gaussian\_kde})
+    \item {\tt sklearn.mixture} ({\tt GaussianMixture})
+    \item {\tt tqdm} (progress bars for 240k iterations)
+    \item {\tt PIL} (Pillow, for image grid generation)
+    \item {\tt prettytable} (GMM parameter tables + LaTeX export)
+    \item {\tt h5py} (HDF5 export for ML datasets)
+    \item {\tt pyarrow} or {\tt fastparquet} (Parquet I/O)
+    \item {\tt google.colab} (Google Drive mount, Colab-specific)
+\end{itemize}
+
+\end{document}

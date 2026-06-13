@@ -1,0 +1,155 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{enumitem}
+
+\title{\textbf{0\_data\_processing} \\ Experimental Dataset Construction Pipeline}
+\author{AzONetV2}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Overview}
+
+This folder contains the pipeline to construct the experimental dataset by merging transmittance spectra ({\tt .txt}) with thickness measurements ({\tt .csv}), correcting thickness values where needed, and selecting the best-quality samples. The final output is a cleaned dataset of 145 AZO (Aluminium-doped Zinc Oxide) thin-film samples.
+
+\section{Notebooks}
+
+\subsection{Notebook 0 --- 101 Samples}
+\textbf{File:} {\tt 0\_DataFrame\_Muestras\_Laboratorio.ipynb}
+
+\textbf{Input:}
+\begin{itemize}
+    \item Thickness: {\tt ../../experimental\_samples/Processed\_Data/Thickness-Order-100-1600-3.csv} (101 samples, columns: Nombre, Nombre-Arc, Espesor, Error, Error Porcentual)
+    \item Spectra: {\tt ../../experimental\_samples/Spectrum\_Order/*.txt}
+\end{itemize}
+
+\textbf{Process:}
+\begin{itemize}
+    \item Reads 101 samples with pre-corrected thickness values --- no linear transformation is applied.
+    \item Uppercases Nombre-Arc for consistency.
+    \item Generates histograms (bins of 3, 5, and 10), KDE density estimation, and error distribution plots.
+    \item Verifies cross-matching: all 101 samples in the CSV match spectra in the folder (both unique sets are empty).
+    \item Merges thickness + spectra on Nombre-Arc via inner join.
+\end{itemize}
+
+\textbf{Output:} {\tt ../../results/dataframe\_spectrum\_thickness\_101.pkl}
+
+\subsection{Notebook 1 --- 15 Samples}
+\textbf{File:} {\tt 1\_DataFrame\_Muestras\_Laboratorio\_15.ipynb}
+
+\textbf{Input:}
+\begin{itemize}
+    \item Thickness: {\tt ../../experimental\_samples/Processed\_Data/Example\_Sample\_IA\_2\_F\_30NEW.csv} (65 rows, only 15 match spectra)
+    \item Spectra: {\tt ../../experimental\_samples/Muestra\_ANZO67-ANZO69/*.txt}
+\end{itemize}
+
+\textbf{Process:}
+\begin{itemize}
+    \item Same structure as Notebook 0, but thickness requires a \textbf{linear correction}:
+    \begin{equation*}
+        E_{\text{corrected}} = \frac{E_{\text{raw}} - 17.897827}{1.1521356}
+    \end{equation*}
+    \item 50 CSV entries do not have corresponding spectra and are excluded by the inner join.
+\end{itemize}
+
+\textbf{Output:} {\tt ../../results/dataframe\_spectrum\_thickness\_15.pkl}
+
+\subsection{Notebook 2 --- 45 Samples}
+\textbf{File:} {\tt 2\_DataFrame\_Muestras\_Laboratorio\_45.ipynb}
+
+\textbf{Input:}
+\begin{itemize}
+    \item Thickness: {\tt ../../experimental\_samples/Processed\_Data/Sample\_Test\_IA\_1\_New.csv} (45 rows)
+    \item Spectra: {\tt ../../experimental\_samples/Sample\_test/*.txt} (51 files; 6 spectra without CSV match are excluded)
+\end{itemize}
+
+\textbf{Process:} Nearly identical to Notebook 1. Applies the \textbf{same linear correction} as Notebook 1.
+
+\textbf{Output:} {\tt ../../results/dataframe\_spectrum\_thickness\_45.pkl}
+
+\subsection{Notebook 3 --- Unify All Samples}
+\textbf{File:} {\tt 3\_Unified\_101\_45\_15.ipynb}
+
+\textbf{Input:} The three {\tt .pkl} files from Notebooks 0, 1, and 2.
+
+\textbf{Process:}
+\begin{itemize}
+    \item Concatenates all dataframes into a single dataframe of \textbf{161 samples} (101 + 45 + 15).
+    \item Adds a Nombre column to the 45-sample and 15-sample dataframes (where Nombre was the CSV index rather than a column) for schema consistency.
+\end{itemize}
+
+\textbf{Output:} {\tt ../../results/dataframe\_spectrum\_thickness\_161.pkl}
+
+\subsection{Notebook 4 --- Figures}
+\textbf{File:} {\tt 4\_Figures.ipynb}
+
+\textbf{Input:}
+\begin{itemize}
+    \item {\tt ../../results/dataframe\_spectrum\_thickness\_161.pkl}
+    \item Precomputed index array: {\tt ./indexes/outlier\_indices\_16.npy} (16 outlier indices)
+\end{itemize}
+
+\textbf{Process:}
+\begin{itemize}
+    \item Loads the 161-sample dataframe and drops the 16 outliers identified during manual inspection, yielding the final \textbf{145 samples}.
+    \item Computes the mean percentage error: $\bar{\varepsilon} \approx 9.61\%$.
+    \item Generates and saves 5 figures to {\tt ./images/}:
+    \begin{itemize}
+        \item Thickness histograms at 200 nm, 100 nm, and 50 nm bin widths (bin edges from 100 to 1500 nm).
+        \item Percentage error histogram (1\% bins from 0 to 40\%).
+        \item KDE density plot of the thickness distribution.
+    \end{itemize}
+\end{itemize}
+
+\textbf{Output:}
+\begin{itemize}
+    \item {\tt ../../results/dataframe\_spectrum\_thickness\_145\_final.pkl} (the final, cleaned dataset)
+    \item {\tt ./images/bin\_200.png}, {\tt bin\_100.png}, {\tt bin\_50.png}, {\tt error1.png}, {\tt kde.png}
+\end{itemize}
+
+\section{Key Differences Between Batches}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Notebook} & \textbf{Samples} & \textbf{Thickness Correction} & \textbf{Spectra Source} \\
+\midrule
+0 & 101 & None (pre-corrected) & Spectrum\_Order/ \\
+1 & 15  & Linear: $(x - 17.90)/1.15$ & Muestra\_ANZO67-ANZO69/ \\
+2 & 45  & Linear: $(x - 17.90)/1.15$ & Sample\_test/ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+    \item Notebooks 1 and 2 came from a different measurement batch, requiring the same thickness calibration.
+    \item Notebooks 0--2 produce independent dataframes; Notebook 3 merges them.
+    \item Notebook 4 drops 16 manually-identified outlier samples in a single step (161 $\rightarrow$ 145), then generates figures.
+\end{itemize}
+
+\section{Final Dataset}
+
+The final dataset ({\tt dataframe\_spectrum\_thickness\_145\_final.pkl}) contains \textbf{145 samples}, each with the following columns:
+
+\begin{itemize}
+    \item \textbf{Nombre} \& \textbf{Nombre-Arc}: sample identifiers.
+    \item \textbf{Espesor}: corrected thickness (nm).
+    \item \textbf{Error} \& \textbf{Error Porcentual}: thickness measurement error (nm) and relative error (\%).
+    \item \textbf{Espectro}: transmittance spectrum (911 wavelength points, 190--1100 nm).
+\end{itemize}
+
+\section{Dependencies}
+\begin{itemize}
+    \item {\tt pandas}, {\tt numpy}, {\tt matplotlib}, {\tt seaborn}
+    \item {\tt pathlib}, {\tt re}
+\end{itemize}
+
+\end{document}
